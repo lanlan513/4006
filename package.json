@@ -1,0 +1,21 @@
+{
+  "name": "global-economy-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "全球经济探索图谱 — 交互式全球经济数据可视化全栈应用",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "build": "npm run build -w client",
+    "start": "npm run start -w server",
+    "seed": "npm run seed -w server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
