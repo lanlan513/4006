@@ -1,7 +1,11 @@
+import { lazy, Suspense } from 'react';
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import Explore from './pages/Explore';
 import CountryProfile from './pages/CountryProfile';
 import ChainPage from './pages/ChainPage';
+
+// 贸易网络页依赖 Leaflet，按需加载以控制首屏体积
+const NetworkPage = lazy(() => import('./pages/NetworkPage'));
 
 function Header() {
   const { pathname } = useLocation();
@@ -16,6 +20,9 @@ function Header() {
       <nav className="nav-links">
         <Link to="/" className={`nav-link ${pathname === '/' ? 'active' : ''}`}>
           探索地图
+        </Link>
+        <Link to="/network" className={`nav-link ${pathname === '/network' ? 'active' : ''}`}>
+          贸易网络
         </Link>
         <Link
           to="/chain/oil"
@@ -35,6 +42,14 @@ export default function App() {
       <Header />
       <Routes>
         <Route path="/" element={<Explore />} />
+        <Route
+          path="/network"
+          element={
+            <Suspense fallback={<div className="empty-hint">贸易网络加载中…</div>}>
+              <NetworkPage />
+            </Suspense>
+          }
+        />
         <Route path="/country/:code" element={<CountryProfile />} />
         <Route path="/chain/:id" element={<ChainPage />} />
       </Routes>

@@ -14,6 +14,16 @@
 - 地图缩放、拖拽和悬浮提示。
 - 打开全球贸易网络后，展示主要双边贸易流；选中国家后可聚焦其贸易伙伴。
 
+### 贸易网络（Leaflet + Canvas）
+
+- Leaflet 二维地图初始化（CARTO 深色瓦片，可替换高德 / Mapbox 瓦片源），支持缩放、拖拽与跨日界线世界副本。
+- 国家中心坐标由后端以 GeoJSON（FeatureCollection）提供：`GET /api/geo/country-centroids`。
+- 后端贸易流附带主导商品类别（出口国第一大出口商品类别），前端整理为 `{source, target, volume, category}` 的无向邻接表。
+- 自定义 Canvas 图层绘制国家节点（半径 ∝ √贸易总额，颜色 = 主导类别）与贸易连线。
+- 连线采用三阶贝塞尔曲线（Cubic Bezier），双向贸易流分弯向弦的两侧，避免直线在球面上交错叠重；跨日界线连线按最短路径展开。
+- 点击节点高亮当前国家及其直接贸易伙伴，隐去不相关的节点与连线；聚焦态连线带流动虚线与方向箭头；点击空白处或再次点击还原。
+- 悬停节点/连线显示详情提示；右侧面板列出主要贸易伙伴并可跳转国家画像。
+
 ### 国家经济画像
 
 - 展示最新年度 GDP、人均 GDP、人口、出口、进口和贸易差额。
@@ -58,7 +68,9 @@ npm run seed
 ```text
 client/src/
   components/   地图、图表、时间轴、产业链流程等可复用组件
-  pages/        探索地图、国家画像、产业链页面
+                （TradeNetworkMap / TradeCanvasLayer 为 Leaflet + Canvas 贸易网络图层）
+  pages/        探索地图、贸易网络、国家画像、产业链页面
+  lib/          tradeTopology：贸易流 → 邻接表、三阶贝塞尔曲线几何
   api.ts        前端 API 类型和请求层
   store.ts      年份、选中国家、指标和贸易网络状态
 server/src/

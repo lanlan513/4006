@@ -586,6 +586,90 @@ input[type='range'].year-slider::-webkit-slider-thumb {
   color: var(--text-faint);
   font-size: 13px;
 }
+
+/* ============ 贸易网络页（Leaflet + Canvas） ============ */
+.leaflet-map {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(35, 56, 82, 0.28), transparent 62%),
+    var(--bg);
+}
+.leaflet-container {
+  font: inherit;
+  background: transparent;
+}
+.leaflet-container .leaflet-control-attribution {
+  background: rgba(12, 15, 21, 0.72);
+  color: var(--text-faint);
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 6px 0 0 0;
+}
+.leaflet-control-attribution a { color: var(--text-dim); }
+.leaflet-bar {
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.leaflet-bar a {
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+}
+.leaflet-bar a:last-child { border-bottom: none; }
+.leaflet-bar a:hover { background: #1a2230; color: var(--text); }
+.leaflet-control-zoom { margin-left: 18px !important; margin-bottom: 108px !important; }
+
+.trade-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.network-panel { width: 252px; }
+.network-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.65;
+  margin-bottom: 12px;
+}
+.cat-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.cat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cat-item i {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.network-focus .section-title { margin: 16px 0 6px; font-size: 10px; }
+.network-focus .section-title::after { display: none; }
+.p2-flows {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .page-error {
   top: 18px;
   left: 50%;

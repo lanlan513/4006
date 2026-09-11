@@ -60,6 +60,18 @@ export interface TradeFlow {
   exporter: string;
   importer: string;
   value: number;
+  /** 主导商品类别（出口国第一大出口商品所属类别，无数据时为“综合”） */
+  category: string;
+}
+
+/** 国家中心点 GeoJSON（/api/geo/country-centroids） */
+export interface CountryCentroidsGeoJSON {
+  type: 'FeatureCollection';
+  features: {
+    type: 'Feature';
+    geometry: { type: 'Point'; coordinates: [number, number] };
+    properties: { code: string; name: string; region: string };
+  }[];
 }
 
 export interface ChainStage {
@@ -136,6 +148,7 @@ export const api = {
     get<{ year: number; focus: string | null; flows: TradeFlow[] }>(
       `/api/trade?year=${year}${country ? `&country=${country}` : ''}`
     ),
+  countryCentroids: () => get<CountryCentroidsGeoJSON>('/api/geo/country-centroids'),
   chains: () => get<{ chains: ChainBrief[] }>('/api/chains'),
   chain: (id: string) => get<ChainDetail>(`/api/chains/${id}`),
 };

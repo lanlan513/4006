@@ -115,7 +115,34 @@ app.get('/api/countries/:code', (req, res) => {
   res.json({ country, timeseries, products, partners, chains, latestYear });
 });
 
+/* ---------------- 国家中心点 GeoJSON ---------------- */
+
+app.get('/api/geo/country-centroids', (_req, res) => {
+  const rows = db
+    .prepare('SELECT code, name, region, lon, lat FROM countries ORDER BY code')
+    .all() as { code: string; name: string; region: string; lon: number; lat: number }[];
+  res.json({
+    type: 'FeatureCollection',
+    features: rows.map((c) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+      properties: { code: c.code, name: c.name, region: c.region },
+    })),
+  });
+});
+
 /* ---------------- 贸易网络 ---------------- */
+
+// 每条贸易流附带主导商品类别：取出口国排名第一的出口商品所属类别，
+// 供前端整理为 {source, target, volume, category} 邻接表并按类别着色。
+const TRADE_SELECT = `
+  SELECT f.exporter, f.importer, f.value,
+         COALESCE(p.category, '综合') AS category
+  FROM trade_flows f
+  LEFT JOIN country_products cp
+    ON cp.country_code = f.exporter AND cp.flow_type = 'ex' AND cp.rank = 1
+   AND cp.year = (SELECT MAX(year) FROM country_products)
+  LEFT JOIN products p ON p.code = cp.product_code`;
 
 app.get('/api/trade', (req, res) => {
   const year = clampYear(Number(req.query.year));
@@ -125,19 +152,17 @@ app.get('/api/trade', (req, res) => {
   if (focus) {
     rows = db
       .prepare(
-        `SELECT exporter, importer, value
-         FROM trade_flows
-         WHERE year = ? AND (exporter = ? OR importer = ?)
-         ORDER BY value DESC`
+        `${TRADE_SELECT}
+         WHERE f.year = ? AND (f.exporter = ? OR f.importer = ?)
+         ORDER BY f.value DESC`
       )
       .all(year, focus, focus);
   } else {
     rows = db
       .prepare(
-        `SELECT exporter, importer, value
-         FROM trade_flows
-         WHERE year = ?
-         ORDER BY value DESC LIMIT 72`
+        `${TRADE_SELECT}
+         WHERE f.year = ?
+         ORDER BY f.value DESC LIMIT 72`
       )
       .all(year);
   }
