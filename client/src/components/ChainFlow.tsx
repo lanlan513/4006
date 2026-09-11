@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import type { ChainDetail } from '../api';
+import type { IndustryChain } from '../industry/types';
 import { stageColor } from './WorldMap';
 
 interface Props {
-  chain: ChainDetail;
+  chain: IndustryChain;
   onNodeClick: (code: string) => void;
 }
 
@@ -21,28 +21,36 @@ interface Placed {
 }
 
 /**
- * 产业链横向流程图：阶段从左到右推进，节点为国家，
- * 弧线表示货物流向，节点按阶段依次浮现。
+ * 产业链横向流程图：环节从左到右推进，节点为国家，
+ * 弧线表示货物流向，节点按环节依次浮现。
+ * 纯数据驱动：环节列、节点、连线全部来自 chain 数据；
+ * 空数据直接不渲染，由上层负责空态展示。
  */
 export default function ChainFlow({ chain, onNodeClick }: Props) {
-  const { nodes, edges } = chain;
-  const stages = chain.chain.stages;
+  const { nodes, edges, segments } = chain;
 
   const layout = useMemo(() => {
-    const cols = stages.map((s) => nodes.filter((n) => n.stage === s.key).sort((a, b) => b.weight - a.weight));
-    const maxRows = Math.max(...cols.map((c) => c.length));
-    const width = stages.length * COL_W + 10;
+    const cols = segments.map((s) =>
+      nodes.filter((n) => n.segment === s.key).sort((a, b) => b.weight - a.weight)
+    );
+    // 空环节 / 空节点时行数为 0，避免 Math.max(...[]) 得到 -Infinity
+    const maxRows = cols.reduce((m, c) => Math.max(m, c.length), 0);
+    const width = segments.length * COL_W + 10;
     const height = HEADER_H + maxRows * (NODE_H + GAP) + 10;
 
-    const place = new Map<string, Placed & { code: string; name: string; role: string; weight: number; stageIdx: number }>();
+    // 节点按 ID 放置，边通过源 / 目标节点 ID 直接解析
+    const place = new Map<
+      string,
+      Placed & { country: string; countryName: string; role: string; weight: number; segmentIdx: number }
+    >();
     cols.forEach((col, ci) => {
       col.forEach((n, ri) => {
-        place.set(`${n.code}|${n.stage}`, {
-          code: n.code,
-          name: n.name,
+        place.set(n.id, {
+          country: n.country,
+          countryName: n.countryName,
           role: n.role,
           weight: n.weight,
-          stageIdx: ci,
+          segmentIdx: ci,
           x: ci * COL_W + 20,
           y: HEADER_H + ri * (NODE_H + GAP),
           w: NODE_W,
@@ -53,8 +61,8 @@ export default function ChainFlow({ chain, onNodeClick }: Props) {
 
     const placedEdges = edges
       .map((e) => {
-        const from = place.get(`${e.from}|${e.fromStage}`);
-        const to = place.get(`${e.to}|${e.toStage}`);
+        const from = place.get(e.source);
+        const to = place.get(e.target);
         if (!from || !to) return null;
         const p0x = from.x + from.w;
         const p0y = from.y + from.h / 2;
@@ -64,11 +72,11 @@ export default function ChainFlow({ chain, onNodeClick }: Props) {
         const mx = 0.125 * p0x + 0.375 * (p0x + dx) + 0.375 * (p1x - dx) + 0.125 * p1x;
         const my = 0.125 * p0y + 0.375 * p0y + 0.375 * p1y + 0.125 * p1y;
         return {
-          key: `${e.from}-${e.to}-${e.fromStage}`,
+          key: e.id,
           d: `M${p0x},${p0y} C${p0x + dx},${p0y} ${p1x - dx},${p1y} ${p1x - 4},${p1y}`,
           arrow: `${p1x - 4},${p1y} ${p1x - 11},${p1y - 4} ${p1x - 11},${p1y + 4}`,
-          color: stageColor(stages, e.fromStage),
-          width: 0.8 + e.value * 0.45,
+          color: stageColor(segments, segments[from.segmentIdx]?.key ?? ''),
+          width: 0.8 + e.volume * 0.45,
           label: e.label,
           lx: mx,
           ly: my,
@@ -76,15 +84,18 @@ export default function ChainFlow({ chain, onNodeClick }: Props) {
       })
       .filter(Boolean);
 
-    return { width, height, cols, place, placedEdges };
-  }, [chain]);
+    return { width, height, place, placedEdges };
+  }, [nodes, edges, segments]);
+
+  // 防御：空数据不渲染（正常路径下上层已用空态拦截）
+  if (segments.length === 0 || nodes.length === 0) return null;
 
   return (
     <div className="flow-diagram">
       <svg width={layout.width} height={layout.height} className="chain-flow-svg">
-        {/* 阶段表头 */}
-        {stages.map((s, i) => {
-          const color = stageColor(stages, s.key);
+        {/* 环节表头 */}
+        {segments.map((s, i) => {
+          const color = stageColor(segments, s.key);
           return (
             <g key={s.key}>
               <text
@@ -136,15 +147,15 @@ export default function ChainFlow({ chain, onNodeClick }: Props) {
 
         {/* 国家节点 */}
         {[...layout.place.entries()].map(([key, n]) => {
-          const color = stageColor(stages, stages[n.stageIdx].key);
+          const color = stageColor(segments, segments[n.segmentIdx]?.key ?? '');
           return (
             <g
               key={key}
               className="sn"
-              style={{ cursor: 'pointer', animationDelay: `${n.stageIdx * 160}ms` }}
-              onClick={() => onNodeClick(n.code)}
+              style={{ cursor: 'pointer', animationDelay: `${n.segmentIdx * 160}ms` }}
+              onClick={() => onNodeClick(n.country)}
             >
-              <title>{n.name} · {n.role}</title>
+              <title>{n.countryName} · {n.role}</title>
               <rect
                 x={n.x}
                 y={n.y}
@@ -157,7 +168,7 @@ export default function ChainFlow({ chain, onNodeClick }: Props) {
               />
               <rect x={n.x} y={n.y} width={3.5} height={n.h} rx={2} fill={color} />
               <text x={n.x + 12} y={n.y + 23} fontSize={13} fontWeight={700} fill="#e6ebf2">
-                {n.name}
+                {n.countryName}
               </text>
               <text x={n.x + 12} y={n.y + 42} fontSize={10} fill={color} fillOpacity={0.9}>
                 {n.role.length > 13 ? n.role.slice(0, 13) + '…' : n.role}

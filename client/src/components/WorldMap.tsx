@@ -2,7 +2,8 @@ import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { geoNaturalEarth1, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import worldTopo from 'world-atlas/countries-110m.json';
-import type { CountryListItem, TradeFlow, ChainNode, ChainEdge, ChainStage } from '../api';
+import type { CountryListItem, TradeFlow } from '../api';
+import type { IndustryChain, IndustrySegment } from '../industry/types';
 import type { MetricKey } from '../store';
 import { fmtTradeB } from '../format';
 
@@ -13,8 +14,8 @@ export const STAGE_COLORS = ['#d98a6e', '#e0a94f', '#57a9c9', '#7fb069', '#b48ac
 const LAND = '#171e2a';
 const LAND_DIM = '#11161f';
 
-export function stageColor(stages: ChainStage[], key: string): string {
-  const i = stages.findIndex((s) => s.key === key);
+export function stageColor(segments: IndustrySegment[], key: string): string {
+  const i = segments.findIndex((s) => s.key === key);
   return STAGE_COLORS[i < 0 ? STAGE_COLORS.length - 1 : i];
 }
 
@@ -96,12 +97,6 @@ function arcPath(x0: number, y0: number, x1: number, y1: number): string {
 
 /* ---------- 组件 ---------- */
 
-export interface ChainOverlay {
-  stages: ChainStage[];
-  nodes: ChainNode[];
-  edges: ChainEdge[];
-}
-
 interface Props {
   countries: CountryListItem[];
   metric: MetricKey;
@@ -109,7 +104,7 @@ interface Props {
   onSelect: (code: string | null) => void;
   flows?: TradeFlow[] | null;
   networkOn?: boolean;
-  chain?: ChainOverlay | null;
+  chain?: IndustryChain | null;
   onNodeClick?: (code: string) => void;
 }
 
@@ -164,7 +159,7 @@ export default function WorldMap({
   const chainCountry = useMemo(() => {
     if (!chain) return null;
     const m = new Map<string, string>();
-    for (const n of chain.nodes) if (!m.has(n.code)) m.set(n.code, n.stage);
+    for (const n of chain.nodes) if (!m.has(n.country)) m.set(n.country, n.segment);
     return m;
   }, [chain]);
 
@@ -261,22 +256,27 @@ export default function WorldMap({
   /* 产业链叠加 */
   const chainArcs = useMemo(() => {
     if (!chain) return [];
+    // 节点按 ID 定位，边通过源 / 目标节点 ID 解析
     const pos = new Map<string, [number, number]>();
+    const segmentOf = new Map<string, string>();
     for (const n of chain.nodes) {
       const p = projection([n.lon, n.lat]);
-      if (p) pos.set(n.code, p);
+      if (p) {
+        pos.set(n.id, p);
+        segmentOf.set(n.id, n.segment);
+      }
     }
-    const maxV = Math.max(...chain.edges.map((e) => e.value), 1);
+    const maxV = Math.max(...chain.edges.map((e) => e.volume), 1);
     return chain.edges
       .map((e) => {
-        const pa = pos.get(e.from);
-        const pb = pos.get(e.to);
+        const pa = pos.get(e.source);
+        const pb = pos.get(e.target);
         if (!pa || !pb) return null;
         return {
-          key: `${e.from}-${e.to}-${e.fromStage}`,
+          key: e.id,
           d: arcPath(pa[0], pa[1], pb[0], pb[1]),
-          color: stageColor(chain.stages, e.fromStage),
-          width: 0.8 + (e.value / maxV) * 3.2,
+          color: stageColor(chain.segments, segmentOf.get(e.source) ?? ''),
+          width: 0.8 + (e.volume / maxV) * 3.2,
           label: e.label,
         };
       })
@@ -329,7 +329,7 @@ export default function WorldMap({
             let fill: string;
             if (chain) {
               if (isChainCountry) {
-                fill = hexToRgba(stageColor(chain.stages, chainCountry!.get(code!)!), 0.32);
+                fill = hexToRgba(stageColor(chain.segments, chainCountry!.get(code!)!), 0.32);
               } else fill = LAND_DIM;
             } else if (c) {
               fill = scale.get(metricValue(c, metric));
@@ -389,34 +389,34 @@ export default function WorldMap({
 
           {/* 产业链节点 */}
           {chain &&
-            chain.nodes.map((n, i) => {
+            chain.nodes.map((n) => {
               const p = projection([n.lon, n.lat]);
               if (!p) return null;
-              const color = stageColor(chain.stages, n.stage);
+              const color = stageColor(chain.segments, n.segment);
               return (
                 <g
-                  key={`${n.code}-${n.stage}`}
+                  key={n.id}
                   className="chain-node"
                   opacity={0.95}
                   onPointerEnter={(e) =>
                     setTip({
                       x: e.clientX,
                       y: e.clientY,
-                      title: `${n.name} · ${n.role}`,
-                      rows: [['产业链环节', chain.stages.find((s) => s.key === n.stage)?.label ?? ''], [n.detail, '']],
+                      title: `${n.countryName} · ${n.role}`,
+                      rows: [['产业链环节', chain.segments.find((s) => s.key === n.segment)?.label ?? ''], [n.detail, '']],
                     })
                   }
                   onPointerLeave={() => setTip(null)}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onNodeClick?.(n.code);
+                    onNodeClick?.(n.country);
                   }}
                 >
                   <circle cx={p[0]} cy={p[1]} r={4 + n.weight * 0.95} fill={hexToRgba(color, 0.35)} />
                   <circle cx={p[0]} cy={p[1]} r={2.2 + n.weight * 0.35} fill={color} />
                   {n.weight >= 8 && (
                     <text x={p[0]} y={p[1] - 7 - n.weight * 0.9} textAnchor="middle" className="map-label">
-                      {n.name}
+                      {n.countryName}
                     </text>
                   )}
                 </g>

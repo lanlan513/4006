@@ -2,6 +2,7 @@ import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import Explore from './pages/Explore';
 import CountryProfile from './pages/CountryProfile';
 import ChainPage from './pages/ChainPage';
+import ChainIndex from './pages/ChainIndex';
 
 function Header() {
   const { pathname } = useLocation();
@@ -18,7 +19,7 @@ function Header() {
           探索地图
         </Link>
         <Link
-          to="/chain/oil"
+          to="/chain"
           className={`nav-link ${pathname.startsWith('/chain') ? 'active' : ''}`}
         >
           全球产业链
@@ -36,6 +37,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Explore />} />
         <Route path="/country/:code" element={<CountryProfile />} />
+        <Route path="/chain" element={<ChainIndex />} />
         <Route path="/chain/:id" element={<ChainPage />} />
       </Routes>
     </>

@@ -59,6 +59,10 @@ npm run seed
 client/src/
   components/   地图、图表、时间轴、产业链流程等可复用组件
   pages/        探索地图、国家画像、产业链页面
+  industry/     产业链领域模型与状态基建
+    types.ts          单条产业链的数据结构（节点 / 有向边 / 环节）
+    normalize.ts      数据规范化与适配（脏数据降级，永不抛异常）
+    industryStore.ts  产业目录与切换逻辑（zustand 状态机）
   api.ts        前端 API 类型和请求层
   store.ts      年份、选中国家、指标和贸易网络状态
 server/src/
@@ -67,6 +71,19 @@ server/src/
   seed.ts       数据播种脚本
   data/         国家、指标、贸易、商品和产业链示例数据
 ```
+
+## 新增一条产业链
+
+产业链完全数据驱动，前端不需要任何代码改动：
+
+1. 在 `server/src/data/chains.ts` 的 `CHAINS` 中新增一个 `ChainSeed` 条目
+   （id、名称、环节 stages、节点 nodes、边 edges），或直接往数据库
+   `value_chains` / `chain_nodes` / `chain_edges` 表写入数据；
+2. 执行 `npm run seed` 重建数据库。
+
+前端 `/api/chains` 目录会自动出现新产业，切换器、流程图、地图均由数据渲染。
+若新产业只注册了元信息、还没有节点数据，页面会展示空状态而不是报错，
+数据补齐后自动正常渲染。
 
 ## 已处理的基础问题
 
