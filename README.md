@@ -17,10 +17,10 @@
 ### 国家经济画像
 
 - 统一通过 `GET /api/country-profile?countryCode=ISO3&year=YYYY` 获取画像数据。
-- 年份来源：URL 参数 `?year=` 优先，缺省回落全局时间轴状态（zustand）；国家来自路由参数 `/country/:code`。
+- 国家来自路由参数 `/country/:code`；年份以全局时间轴状态（zustand）为唯一数据源，URL 的 `?year=` 仅在进入页面 / 路由跳转 / 浏览器前进后退时初始化它，全局切换年份会即时生效并 replace 回地址栏。
+- 无论在画像页内切换国家（伙伴国跳转）还是全局切换年份，都会重新触发 `/api/country-profile` 请求（hook 带竞态保护，深链进入不会先用旧年份多发一次请求）。
 - 加载期间展示骨架屏（Skeleton）；404 未知国家与该年度空数据展示友好空态（Empty State），页面不会抛出 undefined 异常。
 - 返回数据经 Zod Schema（`client/src/schemas.ts`）校验，核心字段包含国家基本信息、GDP、人口、贸易总额（`summary.tradeTotal = 出口 + 进口`）。
-- 全局切换国家或年份（时间轴、URL、伙伴国跳转）会自动重新触发请求，请求带竞态保护。
 - 展示最新年度 GDP、人均 GDP、人口、出口、进口和贸易差额。
 - 展示 GDP、出口与进口、实际 GDP 增速的历史图表。
 - 展示主要出口商品、进口商品和主要贸易伙伴。
@@ -63,7 +63,7 @@ npm run seed
 ```text
 client/src/
   components/   地图、图表、时间轴、骨架屏、空态、产业链流程等可复用组件
-  hooks/        画像页数据请求 hook（countryCode/year 监听 + 竞态保护）
+  hooks/        画像页数据请求 hook 与 URL/全局状态同步 hook（countryCode/year 监听 + 竞态保护）
   pages/        探索地图、国家画像、产业链页面
   api.ts        前端 API 类型和请求层（含 Zod 校验封装与错误分类）
   schemas.ts    接口返回数据的 Zod Schema

@@ -1,12 +1,11 @@
-import { useEffect } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import EChart, { darkTooltip, axisStyle, splitLine } from '../components/EChart';
 import ProfileSkeleton from '../components/ProfileSkeleton';
 import EmptyState from '../components/EmptyState';
 import { regionName } from '../api';
 import type { CountryProfile as ProfileData } from '../schemas';
 import { useCountryProfile } from '../hooks/useCountryProfile';
-import { useAtlas } from '../store';
+import { useCountryRoute } from '../hooks/useCountryRoute';
 import { fmtDollars, fmtGrowth, fmtPopulation, fmtCompact, fmtTradeB } from '../format';
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -17,12 +16,6 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
       {sub && <div className="kpi-sub">{sub}</div>}
     </div>
   );
-}
-
-/** 解析当前画像页应使用的年份：URL ?year= 优先，非法/缺省回落全局状态 */
-function resolveYear(raw: string | null, fallback: number): number {
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 }
 
 /** 画像主体：仅在数据完整（summary 非空）时渲染，所有字段访问均为空值安全 */
@@ -286,31 +279,10 @@ function ProfileContent({ data, year, onOpenCountry }: {
 }
 
 export default function CountryProfile() {
-  const { code } = useParams<{ code: string }>();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const storeYear = useAtlas((s) => s.year);
-  const setYear = useAtlas((s) => s.setYear);
-  const setSelected = useAtlas((s) => s.setSelected);
 
-  const countryCode = code ? code.trim().toUpperCase() : null;
-  const year = resolveYear(searchParams.get('year'), storeYear);
-
-  // 与全局状态保持双向一致：
-  // 1) URL 显式携带 ?year= 时同步到 store，地图时间轴与画像口径保持一致
-  useEffect(() => {
-    const raw = searchParams.get('year');
-    if (raw == null) return;
-    const y = resolveYear(raw, storeYear);
-    if (y !== storeYear) setYear(y);
-    // 仅在 URL 查询串变化时同步，避免 store 变化回灌造成循环
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  // 2) 当前画像国家同步为全局选中，返回地图时保持定位与贸易网络聚焦
-  useEffect(() => {
-    if (countryCode) setSelected(countryCode);
-  }, [countryCode, setSelected]);
+  // 统一解析 URL 参数与全局状态：返回当前 countryCode 与唯一生效年份
+  const { countryCode, year } = useCountryRoute();
 
   // 统一数据流：countryCode / year 任一变化都会重新请求 /api/country-profile
   const { status, data, errorMessage, retry } = useCountryProfile(countryCode, year);
