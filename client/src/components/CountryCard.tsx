@@ -41,7 +41,7 @@ export default function CountryCard({ country, year, onClose, onFocusNetwork }: 
       </div>
 
       <div className="card-actions">
-        <Link to={`/country/${country.code}`} className="btn-primary">
+        <Link to={`/country/${country.code}?year=${year}`} className="btn-primary">
           进入经济画像 <span className="arrow">→</span>
         </Link>
         <button className="btn-ghost" onClick={onFocusNetwork}>

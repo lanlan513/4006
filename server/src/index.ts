@@ -55,6 +55,116 @@ app.get('/api/countries', (req, res) => {
 
 /* ---------------- 国家经济画像 ---------------- */
 
+/** 画像页核心字段类型（与前端 Zod Schema 保持同一口径） */
+interface ProfileSummary {
+  year: number;
+  gdp: number | null;
+  gdpGrowth: number | null;
+  population: number | null;
+  gdpPerCapita: number | null;
+  exports: number | null;
+  imports: number | null;
+  tradeTotal: number | null;
+}
+
+/**
+ * 国家经济画像统一接口：GET /api/country-profile?countryCode=CHN&year=2023
+ * - countryCode 为 ISO3 编码；year 非法时回落到默认年度
+ * - 国家不存在返回 404；该年度无指标时 summary 为 null（由前端展示空态）
+ * - 商品结构仅播种了最新年度，故 products 取不晚于请求年度的最新可用数据
+ */
+app.get('/api/country-profile', (req, res) => {
+  const rawCode = typeof req.query.countryCode === 'string' ? req.query.countryCode : '';
+  const code = rawCode.trim().toUpperCase();
+  if (!code) {
+    return res.status(400).json({ error: 'missing countryCode query parameter' });
+  }
+  const year = clampYear(Number(req.query.year));
+
+  const country = db
+    .prepare(
+      `SELECT code, name, region, iso_numeric AS isoNumeric, lon, lat
+       FROM countries WHERE code = ?`
+    )
+    .get(code);
+  if (!country) return res.status(404).json({ error: 'country not found' });
+
+  const timeseries = db
+    .prepare(
+      `SELECT year, gdp, gdp_growth AS gdpGrowth, population, gdp_per_capita AS gdpPerCapita,
+              exports, imports
+       FROM country_metrics WHERE country_code = ? ORDER BY year`
+    )
+    .all(code) as Array<Omit<ProfileSummary, 'tradeTotal'>>;
+
+  // 核心画像：当前选中年份的 GDP / 人口 / 贸易总额
+  const metric = timeseries.find((m) => m.year === year) ?? null;
+  const summary: ProfileSummary | null = metric
+    ? {
+        ...metric,
+        tradeTotal: (metric.exports ?? 0) + (metric.imports ?? 0),
+      }
+    : null;
+
+  // 商品结构取 <= 请求年份的最新播种年度（当前种子数据为 2023 年口径）
+  const productYearRow = db
+    .prepare('SELECT MAX(year) AS y FROM country_products WHERE country_code = ? AND year <= ?')
+    .get(code, year) as { y: number | null } | undefined;
+  const productsYear = productYearRow?.y ?? null;
+  const products = productsYear
+    ? db
+        .prepare(
+          `SELECT cp.flow_type AS flowType, cp.share, cp.rank,
+                  p.code AS productCode, p.name AS productName, p.category, p.chain_id AS chainId
+           FROM country_products cp
+           JOIN products p ON p.code = cp.product_code
+           WHERE cp.country_code = ? AND cp.year = ?
+           ORDER BY cp.flow_type, cp.rank`
+        )
+        .all(code, productsYear)
+    : [];
+
+  const partnerSql = (side: 'exporter' | 'importer', other: string) =>
+    db
+      .prepare(
+        `SELECT c.code, c.name, f.value
+         FROM trade_flows f
+         JOIN countries c ON c.code = f.${other}
+         WHERE f.${side} = ? AND f.year = ?
+         ORDER BY f.value DESC LIMIT 8`
+      )
+      .all(code, year);
+
+  const partners = {
+    // 该国出口的目的地 = 出口伙伴
+    exportPartners: partnerSql('exporter', 'importer'),
+    // 该国进口的来源地 = 进口伙伴
+    importPartners: partnerSql('importer', 'exporter'),
+  };
+
+  const chains = db
+    .prepare(
+      `SELECT DISTINCT vc.id, vc.name, vc.subtitle
+       FROM chain_nodes n
+       JOIN value_chains vc ON vc.id = n.chain_id
+       WHERE n.country_code = ?`
+    )
+    .all(code);
+
+  res.json({
+    year,
+    latestYear: YEARS[YEARS.length - 1],
+    country,
+    summary,
+    timeseries,
+    productsYear,
+    products,
+    partners,
+    chains,
+  });
+});
+
+/* 旧版画像接口：保留以兼容既有链接，数据口径与 /api/country-profile 一致 */
 app.get('/api/countries/:code', (req, res) => {
   const code = String(req.params.code).toUpperCase();
   const country = db

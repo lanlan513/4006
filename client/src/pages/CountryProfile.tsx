@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import EChart, { darkTooltip, axisStyle, splitLine } from '../components/EChart';
-import { api, CountryDetail, regionName } from '../api';
+import ProfileSkeleton from '../components/ProfileSkeleton';
+import EmptyState from '../components/EmptyState';
+import { regionName } from '../api';
+import type { CountryProfile as ProfileData } from '../schemas';
+import { useCountryProfile } from '../hooks/useCountryProfile';
+import { useAtlas } from '../store';
 import { fmtDollars, fmtGrowth, fmtPopulation, fmtCompact, fmtTradeB } from '../format';
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -14,52 +19,21 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
   );
 }
 
-export default function CountryProfile() {
-  const { code } = useParams<{ code: string }>();
-  const navigate = useNavigate();
-  const [data, setData] = useState<CountryDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+/** 解析当前画像页应使用的年份：URL ?year= 优先，非法/缺省回落全局状态 */
+function resolveYear(raw: string | null, fallback: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
+}
 
-  useEffect(() => {
-    let alive = true;
-    setData(null);
-    setError(null);
-    if (code) {
-      api.country(code)
-        .then((result) => alive && setData(result))
-        .catch((e: Error) => alive && setError(e.message));
-    }
-    return () => {
-      alive = false;
-    };
-  }, [code]);
+/** 画像主体：仅在数据完整（summary 非空）时渲染，所有字段访问均为空值安全 */
+function ProfileContent({ data, year, onOpenCountry }: {
+  data: ProfileData;
+  year: number;
+  onOpenCountry: (code: string) => void;
+}) {
+  const { country, timeseries, summary, products, partners, chains, latestYear, productsYear } = data;
+  if (!summary) return null; // 由上层 empty 分支兜底，理论上不会进入
 
-  if (!data) {
-    return (
-      <div className="profile empty-hint" role={error ? 'alert' : undefined}>
-        <p>{error ? '经济画像加载失败' : '正在加载经济画像…'}</p>
-        {error && <p className="error-detail">{error}</p>}
-        {error && (
-          <Link to="/" className="btn-ghost error-back">
-            返回探索地图
-          </Link>
-        )}
-      </div>
-    );
-  }
-
-  const { country, timeseries, products, partners, chains, latestYear } = data;
-  const latest = timeseries[timeseries.length - 1];
-  if (!latest) {
-    return (
-      <div className="profile empty-hint" role="alert">
-        <p>该国家暂无年度指标数据。</p>
-        <Link to="/" className="btn-ghost error-back">
-          返回探索地图
-        </Link>
-      </div>
-    );
-  }
   const years = timeseries.map((t) => t.year);
   const exports = products.filter((p) => p.flowType === 'ex');
   const imports = products.filter((p) => p.flowType === 'im');
@@ -68,6 +42,7 @@ export default function CountryProfile() {
     ...partners.importPartners.map((p) => p.value),
     1
   );
+  const tradeTotal = summary.tradeTotal ?? ((summary.exports ?? 0) + (summary.imports ?? 0));
 
   const gdpOption = {
     tooltip: { trigger: 'axis', ...darkTooltip, valueFormatter: (v: unknown) => `$${fmtCompact(Number(v))}` },
@@ -140,63 +115,70 @@ export default function CountryProfile() {
         type: 'bar',
         data: timeseries.map((t) => ({
           value: t.gdpGrowth,
-          itemStyle: { color: t.gdpGrowth >= 0 ? '#4e8571' : '#c06a58', borderRadius: [3, 3, 0, 0] },
+          itemStyle: {
+            color: (t.gdpGrowth ?? 0) >= 0 ? '#4e8571' : '#c06a58',
+            borderRadius: [3, 3, 0, 0],
+          },
         })),
         barMaxWidth: 22,
       },
     ],
   };
 
+  const productTitleSuffix = productsYear && productsYear !== year ? `（${productsYear} 年结构）` : '';
+
   return (
-    <div className="page">
-      <div className="profile">
-        <Link to={`/?c=${country.code}`} className="back-link">
-          ← 返回探索地图
-        </Link>
+    <div className="profile">
+      <Link to={`/?c=${country.code}`} className="back-link">
+        ← 返回探索地图
+      </Link>
 
-        <div className="profile-head">
-          <div>
-            <div className="profile-name">{country.name}</div>
-            <div className="profile-tag">
-              {regionName(country.region)}
-              <span className="dot">·</span>
-              数据截至 {latestYear} 年
-            </div>
+      <div className="profile-head">
+        <div>
+          <div className="profile-name">{country.name}</div>
+          <div className="profile-tag">
+            {regionName(country.region)}
+            <span className="dot">·</span>
+            {year} 年经济画像{year !== latestYear ? `（最新数据截至 ${latestYear} 年）` : ''}
           </div>
         </div>
+      </div>
 
-        <div className="profile-kpis">
-          <Kpi label="名义 GDP" value={fmtDollars(latest.gdp)} sub={`增速 ${fmtGrowth(latest.gdpGrowth)}`} />
-          <Kpi label="人均 GDP" value={fmtDollars(latest.gdpPerCapita)} />
-          <Kpi label="人口" value={fmtPopulation(latest.population)} />
-          <Kpi label="货物出口" value={fmtDollars(latest.exports)} />
-          <Kpi label="货物进口" value={fmtDollars(latest.imports)} />
-          <Kpi
-            label="贸易总额"
-            value={fmtDollars(latest.exports + latest.imports)}
-            sub={latest.exports > latest.imports ? '贸易顺差' : '贸易逆差'}
-          />
+      <div className="profile-kpis">
+        <Kpi label="名义 GDP" value={fmtDollars(summary.gdp)} sub={`增速 ${fmtGrowth(summary.gdpGrowth)}`} />
+        <Kpi label="人均 GDP" value={fmtDollars(summary.gdpPerCapita)} />
+        <Kpi label="人口" value={fmtPopulation(summary.population)} />
+        <Kpi label="货物出口" value={fmtDollars(summary.exports)} />
+        <Kpi label="货物进口" value={fmtDollars(summary.imports)} />
+        <Kpi
+          label="贸易总额"
+          value={fmtDollars(tradeTotal)}
+          sub={(summary.exports ?? 0) > (summary.imports ?? 0) ? '贸易顺差' : '贸易逆差'}
+        />
+      </div>
+
+      <div className="section-title">在全球经济中的轨迹</div>
+      <div className="chart-grid">
+        <div className="chart-card">
+          <h4>GDP 变化</h4>
+          <p>名义 GDP，现价美元 · {years[0]}–{years[years.length - 1]}</p>
+          <EChart option={gdpOption} />
         </div>
-
-        <div className="section-title">在全球经济中的轨迹</div>
-        <div className="chart-grid">
-          <div className="chart-card">
-            <h4>GDP 变化</h4>
-            <p>名义 GDP，现价美元 · {years[0]}–{years[years.length - 1]}</p>
-            <EChart option={gdpOption} />
-          </div>
-          <div className="chart-card">
-            <h4>出口与进口</h4>
-            <p>货物贸易额，美元 · 时间轴同口径</p>
-            <EChart option={tradeOption} />
-          </div>
+        <div className="chart-card">
+          <h4>出口与进口</h4>
+          <p>货物贸易额，美元 · 时间轴同口径</p>
+          <EChart option={tradeOption} />
         </div>
+      </div>
 
-        <div className="section-title">主要贸易商品</div>
-        <div className="two-col">
-          <div className="list-card">
-            <h4>主要出口商品（占出口比）</h4>
-            {exports.map((p) => (
+      <div className="section-title">主要贸易商品{productTitleSuffix}</div>
+      <div className="two-col">
+        <div className="list-card">
+          <h4>主要出口商品（占出口比）</h4>
+          {exports.length === 0 ? (
+            <p className="card-empty">暂无出口商品结构数据。</p>
+          ) : (
+            exports.map((p) => (
               <div className="product-row" key={p.productCode}>
                 <span className="p-name">{p.productName}</span>
                 <div className="p-bar">
@@ -209,11 +191,15 @@ export default function CountryProfile() {
                   </Link>
                 )}
               </div>
-            ))}
-          </div>
-          <div className="list-card">
-            <h4>主要进口商品（占进口比）</h4>
-            {imports.map((p) => (
+            ))
+          )}
+        </div>
+        <div className="list-card">
+          <h4>主要进口商品（占进口比）</h4>
+          {imports.length === 0 ? (
+            <p className="card-empty">暂无进口商品结构数据。</p>
+          ) : (
+            imports.map((p) => (
               <div className="product-row im" key={p.productCode}>
                 <span className="p-name">{p.productName}</span>
                 <div className="p-bar">
@@ -226,67 +212,196 @@ export default function CountryProfile() {
                   </Link>
                 )}
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="section-title">主要贸易伙伴（{latestYear} 年）</div>
-        <div className="two-col">
-          <div className="list-card">
-            <h4>出口目的地 · 点击进入伙伴国画像</h4>
-            {partners.exportPartners.map((p) => (
-              <div className="partner-row" key={p.code} onClick={() => navigate(`/country/${p.code}`)}>
-                <span className="p2-name">{p.name}</span>
-                <div className="p-bar">
-                  <i style={{ width: `${(p.value / maxTrade) * 100}%` }} />
-                </div>
-                <span className="p-share">{fmtTradeB(p.value)}</span>
-              </div>
-            ))}
-          </div>
-          <div className="list-card">
-            <h4>进口来源地 · 点击进入伙伴国画像</h4>
-            {partners.importPartners.map((p) => (
-              <div className="partner-row im" key={p.code} onClick={() => navigate(`/country/${p.code}`)}>
-                <span className="p2-name">{p.name}</span>
-                <div className="p-bar">
-                  <i style={{ width: `${(p.value / maxTrade) * 100}%` }} />
-                </div>
-                <span className="p-share">{fmtTradeB(p.value)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="chart-grid" style={{ marginTop: 16 }}>
-          <div className="chart-card">
-            <h4>实际 GDP 增速</h4>
-            <p>年度实际增速 % · 感受经济周期与冲击</p>
-            <EChart option={growthOption} height={220} />
-          </div>
-          <div className="chart-card">
-            {chains.length > 0 ? (
-              <>
-                <h4>{country.name} 在全球产业链中的角色</h4>
-                <p>点击进入产业链，查看上下游如何连接</p>
-                <div className="chain-cards" style={{ marginTop: 14 }}>
-                  {chains.map((ch) => (
-                    <Link key={ch.id} to={`/chain/${ch.id}`} className="chain-mini">
-                      <b>{ch.name}</b>
-                      <p>{ch.subtitle}</p>
-                    </Link>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <>
-                <h4>在全球产业链中的角色</h4>
-                <p>该国暂未标注产业链节点角色。</p>
-              </>
-            )}
-          </div>
+            ))
+          )}
         </div>
       </div>
+
+      <div className="section-title">主要贸易伙伴（{year} 年）</div>
+      <div className="two-col">
+        <div className="list-card">
+          <h4>出口目的地 · 点击进入伙伴国画像</h4>
+          {partners.exportPartners.length === 0 ? (
+            <p className="card-empty">{year} 年暂无出口伙伴数据。</p>
+          ) : (
+            partners.exportPartners.map((p) => (
+              <div className="partner-row" key={p.code} onClick={() => onOpenCountry(p.code)}>
+                <span className="p2-name">{p.name}</span>
+                <div className="p-bar">
+                  <i style={{ width: `${(p.value / maxTrade) * 100}%` }} />
+                </div>
+                <span className="p-share">{fmtTradeB(p.value)}</span>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="list-card">
+          <h4>进口来源地 · 点击进入伙伴国画像</h4>
+          {partners.importPartners.length === 0 ? (
+            <p className="card-empty">{year} 年暂无进口伙伴数据。</p>
+          ) : (
+            partners.importPartners.map((p) => (
+              <div className="partner-row im" key={p.code} onClick={() => onOpenCountry(p.code)}>
+                <span className="p2-name">{p.name}</span>
+                <div className="p-bar">
+                  <i style={{ width: `${(p.value / maxTrade) * 100}%` }} />
+                </div>
+                <span className="p-share">{fmtTradeB(p.value)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="chart-grid" style={{ marginTop: 16 }}>
+        <div className="chart-card">
+          <h4>实际 GDP 增速</h4>
+          <p>年度实际增速 % · 感受经济周期与冲击</p>
+          <EChart option={growthOption} height={220} />
+        </div>
+        <div className="chart-card">
+          {chains.length > 0 ? (
+            <>
+              <h4>{country.name} 在全球产业链中的角色</h4>
+              <p>点击进入产业链，查看上下游如何连接</p>
+              <div className="chain-cards" style={{ marginTop: 14 }}>
+                {chains.map((ch) => (
+                  <Link key={ch.id} to={`/chain/${ch.id}`} className="chain-mini">
+                    <b>{ch.name}</b>
+                    <p>{ch.subtitle}</p>
+                  </Link>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <h4>在全球产业链中的角色</h4>
+              <p>该国暂未标注产业链节点角色。</p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CountryProfile() {
+  const { code } = useParams<{ code: string }>();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const storeYear = useAtlas((s) => s.year);
+  const setYear = useAtlas((s) => s.setYear);
+  const setSelected = useAtlas((s) => s.setSelected);
+
+  const countryCode = code ? code.trim().toUpperCase() : null;
+  const year = resolveYear(searchParams.get('year'), storeYear);
+
+  // 与全局状态保持双向一致：
+  // 1) URL 显式携带 ?year= 时同步到 store，地图时间轴与画像口径保持一致
+  useEffect(() => {
+    const raw = searchParams.get('year');
+    if (raw == null) return;
+    const y = resolveYear(raw, storeYear);
+    if (y !== storeYear) setYear(y);
+    // 仅在 URL 查询串变化时同步，避免 store 变化回灌造成循环
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // 2) 当前画像国家同步为全局选中，返回地图时保持定位与贸易网络聚焦
+  useEffect(() => {
+    if (countryCode) setSelected(countryCode);
+  }, [countryCode, setSelected]);
+
+  // 统一数据流：countryCode / year 任一变化都会重新请求 /api/country-profile
+  const { status, data, errorMessage, retry } = useCountryProfile(countryCode, year);
+
+  const openCountry = (next: string) => navigate(`/country/${next}?year=${year}`);
+
+  const backToMap = (
+    <Link to={`/?c=${countryCode ?? ''}`} className="btn-ghost error-back">
+      返回探索地图
+    </Link>
+  );
+
+  /* ---------- 缺少有效 countryCode（URL 参数异常）：不发请求，直接空态 ---------- */
+  if (!countryCode) {
+    return (
+      <div className="page">
+        <EmptyState
+          kind="empty"
+          title="缺少国家参数"
+          description="未能从地址中读取国家编码，请从探索地图选择一个国家进入。"
+          actions={backToMap}
+        />
+      </div>
+    );
+  }
+
+  /* ---------- 加载中：骨架屏 ---------- */
+  if (status === 'loading') {
+    return (
+      <div className="page">
+        <ProfileSkeleton />
+      </div>
+    );
+  }
+
+  /* ---------- 404：国家不存在 ---------- */
+  if (status === 'not-found') {
+    return (
+      <div className="page">
+        <EmptyState
+          kind="not-found"
+          title="未找到该国家 / 地区"
+          description={`编码 “${countryCode}” 暂无收录，可能是编码有误或数据尚未覆盖。`}
+          year={year}
+          actions={backToMap}
+        />
+      </div>
+    );
+  }
+
+  /* ---------- 加载错误：网络 / 服务 / 数据结构异常，不抛出到页面 ---------- */
+  if (status === 'error' || !data) {
+    return (
+      <div className="page">
+        <EmptyState
+          kind="error"
+          title="经济画像加载失败"
+          description={errorMessage ?? '数据服务暂时不可用，请稍后重试。'}
+          year={year}
+          actions={
+            <>
+              <button type="button" className="btn-ghost error-back" onClick={retry}>
+                重新加载
+              </button>
+              {backToMap}
+            </>
+          }
+        />
+      </div>
+    );
+  }
+
+  /* ---------- 空数据：国家存在但该年份没有指标 ---------- */
+  if (status === 'empty' || !data.summary) {
+    return (
+      <div className="page">
+        <EmptyState
+          kind="empty"
+          title={`${data.country.name} 在 ${year} 年暂无经济数据`}
+          description={errorMessage ?? '该年度尚未收录 GDP、人口或贸易总额等核心指标，可切换其他年份查看。'}
+          year={year}
+          actions={backToMap}
+        />
+      </div>
+    );
+  }
+
+  /* ---------- 成功 ---------- */
+  return (
+    <div className="page">
+      <ProfileContent data={data} year={year} onOpenCountry={openCountry} />
     </div>
   );
 }
