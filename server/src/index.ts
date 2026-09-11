@@ -22,6 +22,10 @@ app.use(express.json());
 const DEFAULT_YEAR = 2023;
 const clampYear = (y?: number) => (YEARS.includes(Number(y)) ? Number(y) : DEFAULT_YEAR);
 
+app.get('/api/health', (_req, res) => {
+  res.json({ ok: true, service: 'global-economy-atlas', year: DEFAULT_YEAR });
+});
+
 /* ---------------- 元数据 ---------------- */
 
 app.get('/api/meta', (_req, res) => {
@@ -185,6 +189,10 @@ app.get('/api/chains/:id', (req, res) => {
   });
 });
 
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'api route not found' });
+});
+
 /* ---------------- 生产环境静态资源 ---------------- */
 
 const clientDist = resolve(__dirname, '../../client/dist');
@@ -194,6 +202,11 @@ if (existsSync(clientDist)) {
     res.sendFile(resolve(clientDist, 'index.html'));
   });
 }
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[server] 未处理错误', err);
+  res.status(500).json({ error: 'internal server error' });
+});
 
 const PORT = Number(process.env.PORT) || 4000;
 app.listen(PORT, () => {

@@ -93,9 +93,37 @@ export interface ChainDetail {
   edges: ChainEdge[];
 }
 
+export class ApiError extends Error {
+  status: number;
+  url: string;
+
+  constructor(url: string, status: number, message?: string) {
+    super(message ?? `API ${url} → ${status}`);
+    this.name = 'ApiError';
+    this.status = status;
+    this.url = url;
+  }
+}
+
 async function get<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`API ${url} → ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    throw new ApiError(url, 0, '无法连接数据服务，请确认后端已启动。');
+  }
+
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const body = (await res.json()) as { error?: string };
+      detail = body.error ?? '';
+    } catch {
+      // 非 JSON 错误响应仍使用统一的状态码错误。
+    }
+    throw new ApiError(url, res.status, detail || `数据服务返回 ${res.status}`);
+  }
+
   return res.json() as Promise<T>;
 }
 

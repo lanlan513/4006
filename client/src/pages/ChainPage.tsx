@@ -10,16 +10,37 @@ export default function ChainPage() {
   const [chains, setChains] = useState<ChainBrief[]>([]);
   const [detail, setDetail] = useState<ChainDetail | null>(null);
   const [countries, setCountries] = useState<CountryListItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.chains().then((r) => setChains(r.chains));
-    api.countries(2023).then((r) => setCountries(r.countries));
+    let alive = true;
+    Promise.all([api.chains(), api.meta()])
+      .then(([chainResult, meta]) => {
+        if (!alive) return undefined;
+        setChains(chainResult.chains);
+        const nextYear = meta.years[meta.years.length - 1] ?? 2023;
+        return api.countries(nextYear);
+      })
+      .then((countryResult) => {
+        if (alive && countryResult) setCountries(countryResult.countries);
+      })
+      .catch((e: Error) => alive && setError(e.message));
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
     if (!id) return;
+    let alive = true;
     setDetail(null);
-    api.chain(id).then(setDetail);
+    setError(null);
+    api.chain(id)
+      .then((result) => alive && setDetail(result))
+      .catch((e: Error) => alive && setError(e.message));
+    return () => {
+      alive = false;
+    };
   }, [id]);
 
   if (!id) return null;
@@ -45,7 +66,15 @@ export default function ChainPage() {
         </div>
 
         {!detail ? (
-          <div className="empty-hint">正在加载产业链…</div>
+          <div className="empty-hint" role={error ? 'alert' : undefined}>
+            <p>{error ? '产业链加载失败' : '正在加载产业链…'}</p>
+            {error && <p className="error-detail">{error}</p>}
+            {error && (
+              <Link to="/" className="btn-ghost error-back">
+                返回探索地图
+              </Link>
+            )}
+          </div>
         ) : (
           <>
             <div className="chain-head">

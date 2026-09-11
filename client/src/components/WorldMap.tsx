@@ -133,6 +133,7 @@ export default function WorldMap({
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  const [isDragging, setIsDragging] = useState(false);
   const [tip, setTip] = useState<Tip | null>(null);
   const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
 
@@ -205,6 +206,7 @@ export default function WorldMap({
       if (!drag.current.moved && Math.abs(dx) + Math.abs(dy) > 3) {
         // 确认是拖拽后再捕获指针，保证普通点击的事件仍落在国家路径上
         drag.current.moved = true;
+        setIsDragging(true);
         (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
       }
       if (drag.current.moved) {
@@ -294,7 +296,7 @@ export default function WorldMap({
   };
 
   return (
-    <div ref={wrapRef} className={`map-wrap ${drag.current?.moved ? 'dragging' : ''}`}>
+    <div ref={wrapRef} className={`map-wrap ${isDragging ? 'dragging' : ''}`}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -304,10 +306,16 @@ export default function WorldMap({
         onPointerUp={() => {
           const wasClick = drag.current && !drag.current.moved;
           drag.current = null;
+          setIsDragging(false);
           if (wasClick) onSelect(null);
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+          setIsDragging(false);
         }}
         onPointerLeave={() => {
           drag.current = null;
+          setIsDragging(false);
           setTip(null);
         }}
       >
@@ -360,6 +368,7 @@ export default function WorldMap({
               strokeWidth={p.width}
               opacity={p.opacity}
               onClick={(e) => e.stopPropagation()}
+              onPointerUp={(e) => e.stopPropagation()}
               onPointerEnter={(e) =>
                 setTip({
                   x: e.clientX,

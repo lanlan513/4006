@@ -12,15 +12,22 @@ export default function Explore() {
   const [years, setYears] = useState<number[]>([2000, 2005, 2010, 2015, 2020, 2023]);
   const [countries, setCountries] = useState<CountryListItem[]>([]);
   const [flows, setFlows] = useState<TradeFlow[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    api.meta().then((m) => setYears(m.years));
-  }, []);
+    api.meta().then((m) => {
+      setYears(m.years);
+      if (!m.years.includes(year) && m.years.length > 0) setYear(m.years[m.years.length - 1]);
+    }).catch((e: Error) => setError(e.message));
+  }, [setYear]);
 
   useEffect(() => {
     let alive = true;
-    api.countries(year).then((r) => alive && setCountries(r.countries));
+    setError(null);
+    api.countries(year)
+      .then((r) => alive && setCountries(r.countries))
+      .catch((e: Error) => alive && setError(e.message));
     return () => {
       alive = false;
     };
@@ -32,7 +39,9 @@ export default function Explore() {
       return;
     }
     let alive = true;
-    api.trade(year, selected).then((r) => alive && setFlows(r.flows));
+    api.trade(year, selected)
+      .then((r) => alive && setFlows(r.flows))
+      .catch((e: Error) => alive && setError(e.message));
     return () => {
       alive = false;
     };
@@ -42,8 +51,7 @@ export default function Explore() {
   useEffect(() => {
     const c = searchParams.get('c');
     if (c) setSelected(c);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams, setSelected]);
 
   const selectedCountry = useMemo(
     () => countries.find((c) => c.code === selected) ?? null,
@@ -60,14 +68,23 @@ export default function Explore() {
       .map((c) => metricValue(c, metric))
       .filter((v): v is number => v != null);
     return {
-      legendMin: metric === 'gdpGrowth' ? null : Math.min(...vals),
-      legendMax: metric === 'gdpGrowth' ? null : Math.max(...vals),
+      legendMin: metric === 'gdpGrowth' || vals.length === 0 ? null : Math.min(...vals),
+      legendMax: metric === 'gdpGrowth' || vals.length === 0 ? null : Math.max(...vals),
     };
   }, [countries, metric]);
 
   return (
     <div className="page">
       <div className="explore-layout">
+        {error && (
+          <div className="overlay page-error" role="alert">
+            <strong>数据加载失败</strong>
+            <span>{error}</span>
+            <button className="btn-ghost" onClick={() => window.location.reload()}>
+              重新加载
+            </button>
+          </div>
+        )}
         <WorldMap
           countries={countries}
           metric={metric}

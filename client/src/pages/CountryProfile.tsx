@@ -18,16 +18,48 @@ export default function CountryProfile() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const [data, setData] = useState<CountryDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let alive = true;
     setData(null);
-    if (code) api.country(code).then(setData).catch(() => setData(null));
+    setError(null);
+    if (code) {
+      api.country(code)
+        .then((result) => alive && setData(result))
+        .catch((e: Error) => alive && setError(e.message));
+    }
+    return () => {
+      alive = false;
+    };
   }, [code]);
 
-  if (!data) return <div className="profile empty-hint">正在加载经济画像…</div>;
+  if (!data) {
+    return (
+      <div className="profile empty-hint" role={error ? 'alert' : undefined}>
+        <p>{error ? '经济画像加载失败' : '正在加载经济画像…'}</p>
+        {error && <p className="error-detail">{error}</p>}
+        {error && (
+          <Link to="/" className="btn-ghost error-back">
+            返回探索地图
+          </Link>
+        )}
+      </div>
+    );
+  }
 
   const { country, timeseries, products, partners, chains, latestYear } = data;
   const latest = timeseries[timeseries.length - 1];
+  if (!latest) {
+    return (
+      <div className="profile empty-hint" role="alert">
+        <p>该国家暂无年度指标数据。</p>
+        <Link to="/" className="btn-ghost error-back">
+          返回探索地图
+        </Link>
+      </div>
+    );
+  }
   const years = timeseries.map((t) => t.year);
   const exports = products.filter((p) => p.flowType === 'ex');
   const imports = products.filter((p) => p.flowType === 'im');

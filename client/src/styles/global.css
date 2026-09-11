@@ -586,9 +586,42 @@ input[type='range'].year-slider::-webkit-slider-thumb {
   color: var(--text-faint);
   font-size: 13px;
 }
+.page-error {
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  color: var(--red);
+  font-size: 12px;
+}
+.page-error strong { color: var(--text); }
+.page-error .btn-ghost { padding: 5px 9px; font-size: 11px; }
+.error-detail { margin-top: 6px; color: var(--text-faint); }
+.error-back { display: inline-flex; margin-top: 16px; }
 
 @media (max-width: 900px) {
   .chart-grid, .two-col { grid-template-columns: 1fr; }
   .country-card { width: calc(100% - 36px); }
   .header-note { display: none; }
+}
+
+@media (max-width: 640px) {
+  body { overflow: auto; }
+  .app-header { height: auto; min-height: 58px; padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
+  .brand { flex: 1 1 100%; }
+  .nav-links { margin-left: 0; }
+  .page { height: auto; min-height: calc(100% - 58px); }
+  .explore-layout { min-height: 720px; }
+  .controls-panel { top: 12px; left: 12px; width: calc(100% - 24px); }
+  .country-card { top: 178px; right: 12px; width: calc(100% - 24px); max-height: calc(100% - 300px); }
+  .timeline-bar { bottom: 12px; padding: 12px 14px 10px; }
+  .timeline-top { gap: 10px; }
+  .timeline-year { font-size: 24px; min-width: 58px; }
+  .timeline-year small { display: none; }
+  .profile, .chain-page { padding: 22px 16px 50px; }
+  .profile-name { font-size: 28px; }
+  .page-error { width: calc(100% - 24px); flex-wrap: wrap; }
 }
