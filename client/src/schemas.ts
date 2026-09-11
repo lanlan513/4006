@@ -39,6 +39,37 @@ export const profileSummarySchema = yearMetricSchema.extend({
 });
 export type ProfileSummary = z.infer<typeof profileSummarySchema>;
 
+/* ---------------- 同比变化率 ---------------- */
+
+/** 四个核心指标相对上一个收录年度的变化率 %，无法计算（缺测 / 首个年度）时为 null */
+export const countryYoySchema = z.object({
+  baseYear: z.number().int().nullable(),
+  gdp: nullableNumber,
+  population: nullableNumber,
+  gdpPerCapita: nullableNumber,
+  tradeTotal: nullableNumber,
+});
+export type CountryYoy = z.infer<typeof countryYoySchema>;
+
+/* ---------------- 全球位置（排名 / 占比） ---------------- */
+
+/** 单项指标的全球位置：排名、占比 %、参与排名的经济体总量与数量 */
+export const positionStatSchema = z.object({
+  rank: z.number().int().nullable(),
+  total: nullableNumber,
+  share: nullableNumber, // 占收录经济体总量的百分比
+  count: z.number().int(),
+});
+export type PositionStat = z.infer<typeof positionStatSchema>;
+
+export const globalPositionSchema = z.object({
+  year: z.number().int(),
+  gdp: positionStatSchema,
+  population: positionStatSchema,
+  exports: positionStatSchema,
+});
+export type GlobalPosition = z.infer<typeof globalPositionSchema>;
+
 /* ---------------- 贸易商品 / 伙伴 / 产业链 ---------------- */
 
 export const countryProductSchema = z.object({
@@ -73,6 +104,8 @@ export const countryProfileSchema = z.object({
   latestYear: z.number().int(),
   country: countryInfoSchema, // 国家基本信息
   summary: profileSummarySchema.nullable(), // 当前年份核心指标，无数据时为 null
+  yoy: countryYoySchema, // 核心指标同比变化率
+  globalPosition: globalPositionSchema, // GDP / 人口 / 出口额的全球排名与占比
   timeseries: z.array(yearMetricSchema), // 历史指标序列（图表用）
   productsYear: z.number().int().nullable(), // 商品结构对应的数据年份
   products: z.array(countryProductSchema),

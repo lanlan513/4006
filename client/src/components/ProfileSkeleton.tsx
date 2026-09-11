@@ -17,14 +17,42 @@ export default function ProfileSkeleton() {
         </div>
       </div>
 
-      <div className="profile-kpis">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div className="kpi skeleton-kpi" key={i}>
-            <Skeleton width={64} height={10} />
-            <Skeleton width={92} height={22} style={{ marginTop: 10 }} />
-            <Skeleton width={48} height={9} style={{ marginTop: 8 }} />
+      {/* 核心指标卡片（4 张） */}
+      <div className="module-head" aria-hidden="true">
+        <Skeleton width={96} height={16} />
+        <Skeleton width={110} height={11} />
+      </div>
+      <div className="metric-grid">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div className="metric-card" key={i}>
+            <Skeleton width={72} height={11} />
+            <Skeleton width={104} height={24} style={{ marginTop: 9 }} />
+            <Skeleton width={86} height={19} radius={10} style={{ marginTop: 9 }} />
           </div>
         ))}
+      </div>
+
+      {/* 全球位置面板 */}
+      <div className="position-section" style={{ marginTop: 22 }} aria-hidden="true">
+        <div className="module-head">
+          <Skeleton width={200} height={16} />
+        </div>
+        <div className="position-grid">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div className="position-item" key={i}>
+              <div className="position-item-head">
+                <Skeleton width={72} height={72} radius="50%" />
+                <div style={{ flex: 1 }}>
+                  <Skeleton width={64} height={13} />
+                  <Skeleton width={100} height={14} style={{ marginTop: 7 }} />
+                  <Skeleton width={80} height={11} style={{ marginTop: 6 }} />
+                </div>
+              </div>
+              <Skeleton width="100%" height={7} radius={4} style={{ marginTop: 12 }} />
+              <Skeleton width={150} height={10} style={{ marginTop: 8 }} />
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="skeleton-section-title">

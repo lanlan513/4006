@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 import type { Database } from 'better-sqlite3';
 import { getDb } from './db.js';
 import { REGIONS, YEARS } from './data/countries.js';
+import { computeGlobalPosition, computeYoy } from './position.js';
+import type { MetricRow, YoyRow } from './position.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -109,12 +111,32 @@ app.get('/api/country-profile', (req, res) => {
 
   // 核心画像：当前选中年份的 GDP / 人口 / 贸易总额
   const metric = timeseries.find((m) => m.year === year) ?? null;
+  // 贸易总额需要出口、进口同时有值，否则视为缺测（前端统一显示 "--"）
+  const tradeTotal =
+    metric && metric.exports != null && metric.imports != null
+      ? metric.exports + metric.imports
+      : null;
   const summary: ProfileSummary | null = metric
     ? {
         ...metric,
-        tradeTotal: (metric.exports ?? 0) + (metric.imports ?? 0),
+        tradeTotal,
       }
     : null;
+
+  // 同比变化率：与上一个收录年度（缺测则再向前取）对比
+  const yoy = computeYoy(timeseries as unknown as YoyRow[], year);
+
+  // 全球位置：该年度全部收录经济体的 GDP / 人口 / 出口额排名与占比
+  const yearRows = db
+    .prepare(
+      `SELECT c.code, m.gdp, m.population, m.gdp_per_capita AS gdpPerCapita,
+              m.exports, m.imports
+       FROM countries c
+       LEFT JOIN country_metrics m
+         ON m.country_code = c.code AND m.year = ?`
+    )
+    .all(year) as MetricRow[];
+  const globalPosition = computeGlobalPosition(yearRows, code, year);
 
   // 商品结构取 <= 请求年份的最新播种年度（当前种子数据为 2023 年口径）
   const productYearRow = db
@@ -166,6 +188,8 @@ app.get('/api/country-profile', (req, res) => {
     latestYear: YEARS[YEARS.length - 1],
     country,
     summary,
+    yoy,
+    globalPosition,
     timeseries,
     productsYear,
     products,

@@ -2,21 +2,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import EChart, { darkTooltip, axisStyle, splitLine } from '../components/EChart';
 import ProfileSkeleton from '../components/ProfileSkeleton';
 import EmptyState from '../components/EmptyState';
+import MetricCards from '../components/MetricCards';
+import GlobalPosition from '../components/GlobalPosition';
 import { regionName } from '../api';
 import type { CountryProfile as ProfileData } from '../schemas';
 import { useCountryProfile } from '../hooks/useCountryProfile';
 import { useCountryRoute } from '../hooks/useCountryRoute';
-import { fmtDollars, fmtGrowth, fmtPopulation, fmtCompact, fmtTradeB } from '../format';
-
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="kpi">
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{value}</div>
-      {sub && <div className="kpi-sub">{sub}</div>}
-    </div>
-  );
-}
+import { fmtCompact, fmtTradeB } from '../format';
 
 /** 用户请求了未收录年份时的统一提示（加载 / 空态 / 成功各分支均可见） */
 function YearNotice({ correction }: { correction: { requested: number; actual: number } | null }) {
@@ -51,7 +43,6 @@ function ProfileContent({ data, onOpenCountry }: {
     ...partners.importPartners.map((p) => p.value),
     1
   );
-  const tradeTotal = summary.tradeTotal ?? ((summary.exports ?? 0) + (summary.imports ?? 0));
 
   const gdpOption = {
     tooltip: { trigger: 'axis', ...darkTooltip, valueFormatter: (v: unknown) => `$${fmtCompact(Number(v))}` },
@@ -153,18 +144,11 @@ function ProfileContent({ data, onOpenCountry }: {
         </div>
       </div>
 
-      <div className="profile-kpis">
-        <Kpi label="名义 GDP" value={fmtDollars(summary.gdp)} sub={`增速 ${fmtGrowth(summary.gdpGrowth)}`} />
-        <Kpi label="人均 GDP" value={fmtDollars(summary.gdpPerCapita)} />
-        <Kpi label="人口" value={fmtPopulation(summary.population)} />
-        <Kpi label="货物出口" value={fmtDollars(summary.exports)} />
-        <Kpi label="货物进口" value={fmtDollars(summary.imports)} />
-        <Kpi
-          label="贸易总额"
-          value={fmtDollars(tradeTotal)}
-          sub={(summary.exports ?? 0) > (summary.imports ?? 0) ? '贸易顺差' : '贸易逆差'}
-        />
-      </div>
+      {/* 核心指标卡片：GDP / 人口 / 贸易规模 / 人均 GDP（含同比变化率，缺失统一显示 --） */}
+      <MetricCards summary={summary} yoy={data.yoy} />
+
+      {/* 全球位置：GDP / 人口 / 出口额的全球排名与占比（环形图 + 进度条） */}
+      <GlobalPosition data={data.globalPosition} />
 
       <div className="section-title">在全球经济中的轨迹</div>
       <div className="chart-grid">
