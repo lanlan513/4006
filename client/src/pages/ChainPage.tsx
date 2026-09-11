@@ -121,7 +121,7 @@ export default function ChainPage() {
             {/* 地图分布 */}
             <div className="chain-map-card">
               <h4>地理分布 · 产业链如何被放在地球上</h4>
-              <p>彩色节点为各环节国家，连线表示跨阶段的货物流；点击节点可进入该国经济画像</p>
+              <p>彩色节点为各环节国家，连线表示跨阶段的货物流；连线粗细代表贸易量，箭头指向下游；双击节点可进入该国经济画像</p>
               <div className="chain-map-box">
                 <WorldMap
                   countries={countries}

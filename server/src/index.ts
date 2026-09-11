@@ -147,8 +147,9 @@ app.get('/api/trade', (req, res) => {
 /* ---------------- 产业链 ---------------- */
 
 app.get('/api/chains', (_req, res) => {
+  // rowid 保留种子数组中的产业顺序，使入口默认打开数据中的第一条产业链。
   const rows = db
-    .prepare('SELECT id, name, subtitle, description FROM value_chains ORDER BY id')
+    .prepare('SELECT id, name, subtitle, description FROM value_chains ORDER BY rowid')
     .all();
   res.json({ chains: rows });
 });
