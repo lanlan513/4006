@@ -20,7 +20,17 @@ app.use(cors());
 app.use(express.json());
 
 const DEFAULT_YEAR = 2023;
-const clampYear = (y?: number) => (YEARS.includes(Number(y)) ? Number(y) : DEFAULT_YEAR);
+/** 非法年份回落默认年；合法但未收录的年份吸附到最近收录年度（并列取较新者） */
+const clampYear = (y?: number) => {
+  const n = Number(y);
+  if (!Number.isFinite(n)) return DEFAULT_YEAR;
+  if (YEARS.includes(n)) return n;
+  return YEARS.reduce((best, yy) => {
+    const db = Math.abs(yy - n);
+    const dbest = Math.abs(best - n);
+    return db < dbest || (db === dbest && yy > best) ? yy : best;
+  }, YEARS[0]);
+};
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'global-economy-atlas', year: DEFAULT_YEAR });

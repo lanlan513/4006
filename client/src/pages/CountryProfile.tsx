@@ -18,14 +18,30 @@ function Kpi({ label, value, sub }: { label: string; value: string; sub?: string
   );
 }
 
+/** 用户请求了未收录年份时的统一提示（加载 / 空态 / 成功各分支均可见） */
+function YearNotice({ correction }: { correction: { requested: number; actual: number } | null }) {
+  if (!correction) return null;
+  return (
+    <div className="year-notice-wrap">
+      <div className="year-notice" role="status">
+        系统暂未收录 <b>{correction.requested}</b> 年数据，已为你展示时间轴上最近的{' '}
+        <b>{correction.actual}</b> 年经济画像。
+      </div>
+    </div>
+  );
+}
+
 /** 画像主体：仅在数据完整（summary 非空）时渲染，所有字段访问均为空值安全 */
-function ProfileContent({ data, year, onOpenCountry }: {
+function ProfileContent({ data, onOpenCountry }: {
   data: ProfileData;
-  year: number;
   onOpenCountry: (code: string) => void;
 }) {
   const { country, timeseries, summary, products, partners, chains, latestYear, productsYear } = data;
   if (!summary) return null; // 由上层 empty 分支兜底，理论上不会进入
+
+  // 页面一切年份文案以接口实际返回的 data.year 为准（正常情况下与归一化入参相同），
+  // 杜绝“标题年份 ≠ 数据年份”的错位
+  const viewYear = data.year;
 
   const years = timeseries.map((t) => t.year);
   const exports = products.filter((p) => p.flowType === 'ex');
@@ -118,7 +134,7 @@ function ProfileContent({ data, year, onOpenCountry }: {
     ],
   };
 
-  const productTitleSuffix = productsYear && productsYear !== year ? `（${productsYear} 年结构）` : '';
+  const productTitleSuffix = productsYear && productsYear !== viewYear ? `（${productsYear} 年结构）` : '';
 
   return (
     <div className="profile">
@@ -132,7 +148,7 @@ function ProfileContent({ data, year, onOpenCountry }: {
           <div className="profile-tag">
             {regionName(country.region)}
             <span className="dot">·</span>
-            {year} 年经济画像{year !== latestYear ? `（最新数据截至 ${latestYear} 年）` : ''}
+            {viewYear} 年经济画像{viewYear !== latestYear ? `（最新数据截至 ${latestYear} 年）` : ''}
           </div>
         </div>
       </div>
@@ -210,12 +226,12 @@ function ProfileContent({ data, year, onOpenCountry }: {
         </div>
       </div>
 
-      <div className="section-title">主要贸易伙伴（{year} 年）</div>
+      <div className="section-title">主要贸易伙伴（{viewYear} 年）</div>
       <div className="two-col">
         <div className="list-card">
           <h4>出口目的地 · 点击进入伙伴国画像</h4>
           {partners.exportPartners.length === 0 ? (
-            <p className="card-empty">{year} 年暂无出口伙伴数据。</p>
+            <p className="card-empty">{viewYear} 年暂无出口伙伴数据。</p>
           ) : (
             partners.exportPartners.map((p) => (
               <div className="partner-row" key={p.code} onClick={() => onOpenCountry(p.code)}>
@@ -231,7 +247,7 @@ function ProfileContent({ data, year, onOpenCountry }: {
         <div className="list-card">
           <h4>进口来源地 · 点击进入伙伴国画像</h4>
           {partners.importPartners.length === 0 ? (
-            <p className="card-empty">{year} 年暂无进口伙伴数据。</p>
+            <p className="card-empty">{viewYear} 年暂无进口伙伴数据。</p>
           ) : (
             partners.importPartners.map((p) => (
               <div className="partner-row im" key={p.code} onClick={() => onOpenCountry(p.code)}>
@@ -281,8 +297,8 @@ function ProfileContent({ data, year, onOpenCountry }: {
 export default function CountryProfile() {
   const navigate = useNavigate();
 
-  // 统一解析 URL 参数与全局状态：返回当前 countryCode 与唯一生效年份
-  const { countryCode, year } = useCountryRoute();
+  // 统一解析 URL 参数与全局状态：返回当前 countryCode、唯一生效年份及年份纠正信息
+  const { countryCode, year, correction } = useCountryRoute();
 
   // 统一数据流：countryCode / year 任一变化都会重新请求 /api/country-profile
   const { status, data, errorMessage, retry } = useCountryProfile(countryCode, year);
@@ -309,10 +325,11 @@ export default function CountryProfile() {
     );
   }
 
-  /* ---------- 加载中：骨架屏 ---------- */
+  /* ---------- 加载中：骨架屏（年份纠正提示在加载前已计算，直接可见） ---------- */
   if (status === 'loading') {
     return (
       <div className="page">
+        <YearNotice correction={correction} />
         <ProfileSkeleton />
       </div>
     );
@@ -322,6 +339,7 @@ export default function CountryProfile() {
   if (status === 'not-found') {
     return (
       <div className="page">
+        <YearNotice correction={correction} />
         <EmptyState
           kind="not-found"
           title="未找到该国家 / 地区"
@@ -337,6 +355,7 @@ export default function CountryProfile() {
   if (status === 'error' || !data) {
     return (
       <div className="page">
+        <YearNotice correction={correction} />
         <EmptyState
           kind="error"
           title="经济画像加载失败"
@@ -359,6 +378,7 @@ export default function CountryProfile() {
   if (status === 'empty' || !data.summary) {
     return (
       <div className="page">
+        <YearNotice correction={correction} />
         <EmptyState
           kind="empty"
           title={`${data.country.name} 在 ${year} 年暂无经济数据`}
@@ -373,7 +393,8 @@ export default function CountryProfile() {
   /* ---------- 成功 ---------- */
   return (
     <div className="page">
-      <ProfileContent data={data} year={year} onOpenCountry={openCountry} />
+      <YearNotice correction={correction} />
+      <ProfileContent data={data} onOpenCountry={openCountry} />
     </div>
   );
 }
