@@ -791,6 +791,23 @@ input[type='range'].year-slider::-webkit-slider-thumb {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.role-empty {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.role-empty b { color: var(--text); font-weight: 650; }
+.role-empty em {
+  display: block;
+  margin-top: 5px;
+  font-style: normal;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
 
 .role-lists { overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; }
 .role-group-title {

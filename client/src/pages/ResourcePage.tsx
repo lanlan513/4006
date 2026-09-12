@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ResourceMap from '../components/ResourceMap';
+import type { ResourceNodeTarget } from '../components/ResourceMap';
 import ResourceRolePanel from '../components/ResourceRolePanel';
 import { ROLE_META } from '../components/resourceRoles';
 import { api, ResourceBrief, ResourceDetail } from '../api';
@@ -19,6 +20,11 @@ export default function ResourcePage() {
    */
   const [active, setActive] = useState(false);
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  /*
+   * 所点节点的国家不在角色数据集时（如锂矿产地津巴布韦），
+   * 记录其显示名，面板展示空指标状态而非回退到产量第一国家。
+   */
+  const [unknownName, setUnknownName] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -42,6 +48,7 @@ export default function ResourcePage() {
     setDetail(null);
     setActive(false);
     setSelectedCode(null);
+    setUnknownName(null);
     setError(null);
     api
       .resource(id)
@@ -67,16 +74,33 @@ export default function ResourcePage() {
   const roles = active ? detail?.roles ?? [] : [];
   const selectedValid = selectedCode && roles.some((r) => r.code === selectedCode) ? selectedCode : null;
 
-  /* 点击资源节点：激活标注并选中目标国家（无匹配时默认首位主要生产国） */
-  const handleActivate = (code: string | null) => {
-    if (!detail || detail.roles.length === 0) return;
+  /*
+   * 点击资源节点：激活三色标注。
+   * 命中角色数据集 → 选中对应国家；未命中（target.code 为空）→
+   * 仅记录所点国家显示名，面板进入空指标状态，不回退到产量第一国家。
+   */
+  const handleActivate = (target: ResourceNodeTarget) => {
+    if (!detail) return;
     setActive(true);
-    setSelectedCode(code && detail.roles.some((r) => r.code === code) ? code : detail.roles[0].code);
+    if (target.code && detail.roles.some((r) => r.code === target.code)) {
+      setSelectedCode(target.code);
+      setUnknownName(null);
+    } else {
+      setSelectedCode(null);
+      setUnknownName(target.name);
+    }
+  };
+  /* 点击已标注的角色国家：面板切换到该国，退出空指标状态 */
+  const handleSelectRole = (code: string) => {
+    setActive(true);
+    setSelectedCode(code);
+    setUnknownName(null);
   };
   /* 点击空白：清除全部国家标记，恢复底图默认样式 */
   const handleClear = () => {
     setActive(false);
     setSelectedCode(null);
+    setUnknownName(null);
   };
 
   return (
@@ -97,10 +121,7 @@ export default function ResourcePage() {
           roles={roles}
           selectedCode={selectedValid}
           onActivate={handleActivate}
-          onSelectRole={(code) => {
-            setActive(true);
-            setSelectedCode(code);
-          }}
+          onSelectRole={handleSelectRole}
           onClear={handleClear}
         />
 
@@ -170,13 +191,14 @@ export default function ResourcePage() {
           )}
         </div>
 
-        {/* 角色浮层面板：激活后滑入，与右侧排行面板错位（左侧中下部） */}
+        {/* 角色浮层面板：激活后滑入（左下）；未收录国家时展示空指标状态 */}
         {active && detail && (
           <ResourceRolePanel
             detail={detail}
             roles={roles}
             selectedCode={selectedValid}
-            onSelect={setSelectedCode}
+            unknownName={unknownName}
+            onSelect={handleSelectRole}
             onClose={handleClear}
           />
         )}

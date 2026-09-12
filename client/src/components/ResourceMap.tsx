@@ -37,12 +37,23 @@ interface Props {
   roles: ResourceRole[];
   /** 面板选中的国家（ISO3），用于高亮描边 */
   selectedCode: string | null;
-  /** 点击资源节点：激活三类角色标注，payload 为建议选中的国家编码 */
-  onActivate: (code: string | null) => void;
+  /**
+   * 点击资源节点：激活三类角色标注。
+   * 命中角色数据集时带 code；未收录的国家（如锂矿产地津巴布韦）只带显示名，
+   * 面板进入空指标状态——不得回退展示产量第一国家。
+   */
+  onActivate: (target: ResourceNodeTarget) => void;
   /** 点击已标注的角色国家：切换面板选中 */
   onSelectRole: (code: string) => void;
   /** 点击底图空白区域：清除所有国家标注状态，恢复底图默认样式 */
   onClear: () => void;
+}
+
+export interface ResourceNodeTarget {
+  /** 命中角色数据集时的国家 ISO3；未命中时为 undefined */
+  code?: string;
+  /** 所点节点对应的国家 / 显示名（未命中角色数据时用于面板空状态） */
+  name: string;
 }
 
 interface SiteNode {
@@ -217,30 +228,30 @@ export default function ResourceMap({
   const selectedRole = selectedCode ? roleByCode.get(selectedCode) ?? null : null;
 
   /*
-   * 点击资源节点后的目标国家：
+   * 点击资源节点后的目标：
    *  - 消费国圆环直接携带 ISO3
    *  - 产地圆点按「产地所在国家/地区」名称与角色中文名做包含匹配
-   *    （处理「中国·青海」「南亚」等地区名）；
-   *  - 匹配不到时回退到首位主要生产国。
+   *    （处理「中国·青海」「南亚」等地区名）
+   * 匹配始终使用 detail.roles 全量数据而非激活后才非空的 roles prop，
+   * 否则首次点击（active 仍为 false）会因空数组匹配失败。
+   *
+   * 匹配不到角色数据集时（如锂矿产地津巴布韦）只返回显示名、不带 code，
+   * 由面板展示「暂未收录角色数据」空状态，严禁回退到产量第一的生产国。
    */
-  const targetCodeOf = useCallback(
-    (node: SiteNode): string | null => {
-      if (!allRoles.length) return null;
+  const resolveTarget = useCallback(
+    (node: SiteNode): ResourceNodeTarget => {
       if (node.props.code) {
-        return roleByCode.has(node.props.code) ? node.props.code : allRoles[0].code;
+        const direct = roleByCode.get(node.props.code);
+        if (direct) return { code: direct.code, name: direct.name };
+        return { name: node.props.name };
       }
-      const country = (node.props.country ?? '').replace(/（.*?）|\(.*?\)/g, '');
-      if (country) {
-        const hit = allRoles.find((r) => country.includes(r.name) || r.name.includes(country));
-        if (hit) return hit.code;
-        // 「中国·青海」之类的地区名取「·」前缀
-        const head = country.split(/[·•]/)[0]?.trim();
-        if (head) {
-          const hit2 = allRoles.find((r) => head.includes(r.name) || r.name.includes(head));
-          if (hit2) return hit2.code;
-        }
-      }
-      return allRoles[0].code;
+      const raw = (node.props.country ?? '').replace(/（.*?）|\(.*?\)/g, '');
+      const head = raw.split(/[·•]/)[0]?.trim() || raw;
+      const hit =
+        allRoles.find((r) => raw.includes(r.name) || r.name.includes(raw)) ??
+        allRoles.find((r) => head && (head.includes(r.name) || r.name.includes(head)));
+      if (hit) return { code: hit.code, name: hit.name };
+      return { name: head || node.props.name };
     },
     [allRoles, roleByCode]
   );
@@ -426,7 +437,7 @@ export default function ResourceMap({
                 if (drag.current?.moved) return;
                 endDrag();
                 e.stopPropagation();
-                onActivate(targetCodeOf(c));
+                onActivate(resolveTarget(c));
               }}
             >
               <circle cx={c.x} cy={c.y} r={c.r + 2.5} fill="none" stroke={hexToRgba(color, 0.35)} strokeWidth={0.8} strokeDasharray="2 2" />
@@ -453,7 +464,7 @@ export default function ResourceMap({
                 if (drag.current?.moved) return;
                 endDrag();
                 e.stopPropagation();
-                onActivate(targetCodeOf(s));
+                onActivate(resolveTarget(s));
               }}
             >
               <circle cx={s.x} cy={s.y} r={s.r + 2.5} fill={hexToRgba(color, 0.22)} />
