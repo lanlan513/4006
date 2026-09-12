@@ -201,11 +201,17 @@ export default function ResourceMap({
     for (const r of roles) m.set(r.isoNumeric, r);
     return m;
   }, [roles]);
+  /*
+   * 国家匹配始终使用 detail.roles 全量数据，而不是激活后才非空的 roles prop：
+   * 否则首次点击资源节点时（active 仍为 false）匹配会因空数组失败，
+   * 面板错误回退到产量第一的生产国。
+   */
+  const allRoles = detail?.roles ?? [];
   const roleByCode = useMemo(() => {
     const m = new Map<string, ResourceRole>();
-    for (const r of roles) m.set(r.code, r);
+    for (const r of allRoles) m.set(r.code, r);
     return m;
-  }, [roles]);
+  }, [allRoles]);
   const active = roles.length > 0;
 
   const selectedRole = selectedCode ? roleByCode.get(selectedCode) ?? null : null;
@@ -219,24 +225,24 @@ export default function ResourceMap({
    */
   const targetCodeOf = useCallback(
     (node: SiteNode): string | null => {
-      if (!roles.length) return null;
+      if (!allRoles.length) return null;
       if (node.props.code) {
-        return roleByCode.has(node.props.code) ? node.props.code : roles[0].code;
+        return roleByCode.has(node.props.code) ? node.props.code : allRoles[0].code;
       }
       const country = (node.props.country ?? '').replace(/（.*?）|\(.*?\)/g, '');
       if (country) {
-        const hit = roles.find((r) => country.includes(r.name) || r.name.includes(country));
+        const hit = allRoles.find((r) => country.includes(r.name) || r.name.includes(country));
         if (hit) return hit.code;
         // 「中国·青海」之类的地区名取「·」前缀
         const head = country.split(/[·•]/)[0]?.trim();
         if (head) {
-          const hit2 = roles.find((r) => head.includes(r.name) || r.name.includes(head));
+          const hit2 = allRoles.find((r) => head.includes(r.name) || r.name.includes(head));
           if (hit2) return hit2.code;
         }
       }
-      return roles[0].code;
+      return allRoles[0].code;
     },
-    [roles, roleByCode]
+    [allRoles, roleByCode]
   );
 
   /* 国家轮廓渲染数据：激活时按角色着色，未激活时恢复默认 */
@@ -348,7 +354,11 @@ export default function ResourceMap({
                 onPointerUp={
                   role
                     ? (e) => {
+                        // 先结束本次指针手势：stopPropagation 会让父 SVG 的
+                        // onPointerUp 收不到事件，不清理 drag 引用会导致随后
+                        // 鼠标移动被误判为拖拽、地图跟手平移。
                         if (drag.current?.moved) return;
+                        endDrag();
                         e.stopPropagation();
                         onSelectRole(role.code);
                       }
@@ -414,6 +424,7 @@ export default function ResourceMap({
               onPointerLeave={() => setTip(null)}
               onPointerUp={(e) => {
                 if (drag.current?.moved) return;
+                endDrag();
                 e.stopPropagation();
                 onActivate(targetCodeOf(c));
               }}
@@ -440,6 +451,7 @@ export default function ResourceMap({
               onPointerLeave={() => setTip(null)}
               onPointerUp={(e) => {
                 if (drag.current?.moved) return;
+                endDrag();
                 e.stopPropagation();
                 onActivate(targetCodeOf(s));
               }}
