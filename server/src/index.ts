@@ -45,7 +45,8 @@ app.get('/api/countries', (req, res) => {
               m.gdp, m.gdp_growth AS gdpGrowth, m.population, m.gdp_per_capita AS gdpPerCapita,
               m.exports, m.imports,
               m.pop_growth AS popGrowth, m.aging_rate AS agingRate,
-              m.urban_rate AS urbanRate, m.labor_force AS laborForce
+              m.urban_rate AS urbanRate, m.labor_force AS laborForce,
+              m.youth_rate AS youthRate
        FROM countries c
        LEFT JOIN country_metrics m
          ON m.country_code = c.code AND m.year = ?
@@ -72,7 +73,8 @@ app.get('/api/countries/:code', (req, res) => {
       `SELECT year, gdp, gdp_growth AS gdpGrowth, population, gdp_per_capita AS gdpPerCapita,
               exports, imports,
               pop_growth AS popGrowth, aging_rate AS agingRate,
-              urban_rate AS urbanRate, labor_force AS laborForce
+              urban_rate AS urbanRate, labor_force AS laborForce,
+              youth_rate AS youthRate
        FROM country_metrics WHERE country_code = ? ORDER BY year`
     )
     .all(code);
@@ -117,6 +119,27 @@ app.get('/api/countries/:code', (req, res) => {
     .all(code);
 
   res.json({ country, timeseries, products, partners, chains, latestYear });
+});
+
+/* ---------------- 人口结构 × 经济 动态散点数据 ---------------- */
+
+/**
+ * 一次返回全部国家 × 全部年份的散点所需字段。
+ * 前端据此预先计算固定坐标轴范围，播放时间轴时仅更新气泡位置，避免轴域随年份跳变。
+ */
+app.get('/api/scatter', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.code, c.name, c.region, m.year,
+              m.population, m.labor_force AS laborForce,
+              m.gdp_per_capita AS gdpPerCapita, m.gdp,
+              m.youth_rate AS youthRate, m.aging_rate AS agingRate
+       FROM countries c
+       JOIN country_metrics m ON m.country_code = c.code
+       ORDER BY c.code, m.year`
+    )
+    .all();
+  res.json({ years: YEARS, countries: rows });
 });
 
 /* ---------------- 贸易网络 ---------------- */

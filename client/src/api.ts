@@ -17,6 +17,7 @@ export interface CountryListItem {
   agingRate: number | null;
   urbanRate: number | null;
   laborForce: number | null;
+  youthRate: number | null;
 }
 
 export interface YearMetric {
@@ -31,6 +32,21 @@ export interface YearMetric {
   agingRate: number;
   urbanRate: number;
   laborForce: number;
+  youthRate: number;
+}
+
+/** 动态散点图行：一个国家一个年份的快照 */
+export interface ScatterRow {
+  code: string;
+  name: string;
+  region: string;
+  year: number;
+  population: number | null;
+  laborForce: number | null;
+  gdpPerCapita: number | null;
+  gdp: number | null;
+  youthRate: number | null;
+  agingRate: number | null;
 }
 
 export interface CountryProduct {
@@ -146,6 +162,7 @@ export const api = {
     ),
   chains: () => get<{ chains: ChainBrief[] }>('/api/chains'),
   chain: (id: string) => get<ChainDetail>(`/api/chains/${id}`),
+  scatter: () => get<{ years: number[]; countries: ScatterRow[] }>('/api/scatter'),
 };
 
 export const REGION_NAMES: Record<string, string> = {

@@ -4,6 +4,7 @@ import WorldMap, { RAMP, POP_RAMP, POP_GROWTH_RAMP, metricValue } from '../compo
 import Timeline from '../components/Timeline';
 import CountryCard from '../components/CountryCard';
 import SplitPanel from '../components/SplitPanel';
+import ScatterView from '../components/ScatterView';
 import { api, CountryListItem, TradeFlow } from '../api';
 import { useAtlas, METRICS, POP_METRICS, isPopMetric, metricLabel } from '../store';
 import { fmtMetric } from '../format';
@@ -20,6 +21,8 @@ export default function Explore() {
     setMetric,
     splitView,
     toggleSplitView,
+    linkMode,
+    toggleLinkMode,
   } = useAtlas();
   const [years, setYears] = useState<number[]>([2000, 2005, 2010, 2015, 2020, 2023]);
   const [countries, setCountries] = useState<CountryListItem[]>([]);
@@ -28,10 +31,15 @@ export default function Explore() {
   const [searchParams] = useSearchParams();
 
   const popMode = isPopMetric(metric);
-  // 模式切换：进入人口数据模式时落到总人口，回到经济模式时落到 GDP
-  const switchMode = (pop: boolean) => {
-    if (pop && !popMode) setMetric('population');
-    if (!pop && popMode) setMetric('gdp');
+  // 模式切换：经济 / 人口 / 人口结构与经济关联（散点）三种视图互斥
+  const switchMode = (mode: 'econ' | 'pop' | 'link') => {
+    if (mode === 'link') {
+      toggleLinkMode(true);
+      return;
+    }
+    toggleLinkMode(false);
+    if (mode === 'pop' && !popMode) setMetric('population');
+    if (mode === 'econ' && popMode) setMetric('gdp');
   };
 
   useEffect(() => {
@@ -107,60 +115,82 @@ export default function Explore() {
               </button>
             </div>
           )}
-          <WorldMap
-            countries={countries}
-            metric={metric}
-            selected={selected}
-            onSelect={setSelected}
-            flows={networkOn ? flows : null}
-            networkOn={networkOn}
-          />
+          {linkMode ? (
+            <ScatterView year={year} selected={selected} onSelect={setSelected} />
+          ) : (
+            <WorldMap
+              countries={countries}
+              metric={metric}
+              selected={selected}
+              onSelect={setSelected}
+              flows={networkOn ? flows : null}
+              networkOn={networkOn}
+            />
+          )}
 
           {/* 控制面板 */}
           <div className="overlay controls-panel">
-            <div className="controls-title">地图着色指标</div>
+            <div className="controls-title">分析模式</div>
             <div className="mode-tabs">
               <button
-                className={`mode-tab ${popMode ? '' : 'active'}`}
-                onClick={() => switchMode(false)}
+                className={`mode-tab ${!linkMode && !popMode ? 'active' : ''}`}
+                onClick={() => switchMode('econ')}
               >
                 经济指标
               </button>
               <button
-                className={`mode-tab ${popMode ? 'active' : ''}`}
-                onClick={() => switchMode(true)}
+                className={`mode-tab ${!linkMode && popMode ? 'active' : ''}`}
+                onClick={() => switchMode('pop')}
               >
                 人口数据
               </button>
-            </div>
-            <div className="segmented">
-              {(popMode ? POP_METRICS : METRICS).map((m) => (
-                <button
-                  key={m.key}
-                  className={`seg-btn ${metric === m.key ? 'active' : ''}`}
-                  onClick={() => setMetric(m.key)}
-                >
-                  {m.label}
-                </button>
-              ))}
+              <button
+                className={`mode-tab ${linkMode ? 'active' : ''}`}
+                onClick={() => switchMode('link')}
+                title="人口结构与经济关联：劳动力比例 × 人均 GDP 动态散点"
+              >
+                人口×经济
+              </button>
             </div>
 
-            <div className="network-toggle">
-              <div>
-                <span>全球贸易网络</span>
-                <small>{networkOn && selected ? `仅显示与${selectedCountry?.name ?? ''}相关的贸易流` : '动态连线展示主要贸易通道'}</small>
+            {linkMode ? (
+              <div className="link-mode-note">
+                <b>人口结构与经济关联</b>
+                <p>X 轴：劳动力人口比例 · Y 轴：人均 GDP · 气泡：总人口</p>
+                <p>播放时间轴，观察各国气泡在固定坐标系中的迁移轨迹。</p>
               </div>
-              <button
-                className={`switch ${networkOn ? 'on' : ''}`}
-                onClick={() => toggleNetwork()}
-                title="切换贸易网络视图"
-              />
-            </div>
+            ) : (
+              <div className="segmented">
+                {(popMode ? POP_METRICS : METRICS).map((m) => (
+                  <button
+                    key={m.key}
+                    className={`seg-btn ${metric === m.key ? 'active' : ''}`}
+                    onClick={() => setMetric(m.key)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!linkMode && (
+              <div className="network-toggle">
+                <div>
+                  <span>全球贸易网络</span>
+                  <small>{networkOn && selected ? `仅显示与${selectedCountry?.name ?? ''}相关的贸易流` : '动态连线展示主要贸易通道'}</small>
+                </div>
+                <button
+                  className={`switch ${networkOn ? 'on' : ''}`}
+                  onClick={() => toggleNetwork()}
+                  title="切换贸易网络视图"
+                />
+              </div>
+            )}
 
             <div className="network-toggle">
               <div>
                 <span>拆分视图</span>
-                <small>左侧地图 + 右侧人口 × GDP 历史曲线</small>
+                <small>右侧人口 × GDP 历史曲线与双国对比</small>
               </div>
               <button
                 className={`switch ${splitView ? 'on' : ''}`}
@@ -169,47 +199,49 @@ export default function Explore() {
               />
             </div>
 
-            {/* 图例 */}
-            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-              <div className="controls-title" style={{ marginBottom: 4 }}>
-                {metricLabel(metric)}
-              </div>
-              {metric === 'gdpGrowth' ? (
-                <div className="ramp">
-                  {['#c06a58', '#2b3a4a', '#38596f', '#4e8571', '#7fb069'].map((c) => (
-                    <i key={c} style={{ background: c }} />
-                  ))}
+            {/* 图例（散点模式下图例内置于视图） */}
+            {!linkMode && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                <div className="controls-title" style={{ marginBottom: 4 }}>
+                  {metricLabel(metric)}
                 </div>
-              ) : metric === 'popGrowth' ? (
-                <div
-                  className="ramp-gradient"
-                  style={{ background: `linear-gradient(to right, ${POP_GROWTH_RAMP.join(',')})` }}
-                />
-              ) : popMode ? (
-                <div
-                  className="ramp-gradient"
-                  style={{ background: `linear-gradient(to right, ${POP_RAMP.join(',')})` }}
-                />
-              ) : (
-                <div className="ramp">
-                  {RAMP.map((c) => (
-                    <i key={c} style={{ background: c }} />
-                  ))}
-                </div>
-              )}
-              <div className="legend-labels">
                 {metric === 'gdpGrowth' ? (
-                  <span>衰退 ←→ 高增长</span>
+                  <div className="ramp">
+                    {['#c06a58', '#2b3a4a', '#38596f', '#4e8571', '#7fb069'].map((c) => (
+                      <i key={c} style={{ background: c }} />
+                    ))}
+                  </div>
                 ) : metric === 'popGrowth' ? (
-                  <span>人口收缩 ←→ 人口扩张</span>
+                  <div
+                    className="ramp-gradient"
+                    style={{ background: `linear-gradient(to right, ${POP_GROWTH_RAMP.join(',')})` }}
+                  />
+                ) : popMode ? (
+                  <div
+                    className="ramp-gradient"
+                    style={{ background: `linear-gradient(to right, ${POP_RAMP.join(',')})` }}
+                  />
                 ) : (
-                  <>
-                    <span>{fmtMetric(metric, legendMin)}</span>
-                    <span>{fmtMetric(metric, legendMax)}</span>
-                  </>
+                  <div className="ramp">
+                    {RAMP.map((c) => (
+                      <i key={c} style={{ background: c }} />
+                    ))}
+                  </div>
                 )}
+                <div className="legend-labels">
+                  {metric === 'gdpGrowth' ? (
+                    <span>衰退 ←→ 高增长</span>
+                  ) : metric === 'popGrowth' ? (
+                    <span>人口收缩 ←→ 人口扩张</span>
+                  ) : (
+                    <>
+                      <span>{fmtMetric(metric, legendMin)}</span>
+                      <span>{fmtMetric(metric, legendMax)}</span>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* 国家卡片 */}
@@ -218,17 +250,21 @@ export default function Explore() {
               country={selectedCountry}
               year={year}
               onClose={() => setSelected(null)}
-              onFocusNetwork={() => toggleNetwork(true)}
+              onFocusNetwork={() => {
+                toggleLinkMode(false);
+                toggleNetwork(true);
+              }}
             />
           )}
 
           <Timeline years={years} value={year} onChange={setYear} globalGdp={globalGdp} />
         </div>
 
-        {/* 拆分视图：右侧人口 × GDP 历史曲线 */}
+        {/* 拆分视图：右侧人口 × GDP 历史曲线 + 双国对比 */}
         {splitView && (
           <SplitPanel
             country={selectedCountry}
+            allCountries={countries}
             year={year}
             onClose={() => toggleSplitView(false)}
           />

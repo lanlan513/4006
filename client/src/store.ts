@@ -34,11 +34,14 @@ interface AtlasState {
   networkOn: boolean;
   metric: MapMetricKey;
   splitView: boolean;
+  /** 人口结构与经济关联分析模式：主视图切换为动态散点图 */
+  linkMode: boolean;
   setYear: (y: number) => void;
   setSelected: (code: string | null) => void;
   toggleNetwork: (on?: boolean) => void;
   setMetric: (m: MapMetricKey) => void;
   toggleSplitView: (on?: boolean) => void;
+  toggleLinkMode: (on?: boolean) => void;
 }
 
 export const useAtlas = create<AtlasState>((set) => ({
@@ -47,9 +50,11 @@ export const useAtlas = create<AtlasState>((set) => ({
   networkOn: false,
   metric: 'gdp',
   splitView: false,
+  linkMode: false,
   setYear: (year) => set({ year }),
   setSelected: (selected) => set({ selected }),
   toggleNetwork: (on) => set((s) => ({ networkOn: on ?? !s.networkOn })),
   setMetric: (metric) => set({ metric }),
   toggleSplitView: (on) => set((s) => ({ splitView: on ?? !s.splitView })),
+  toggleLinkMode: (on) => set((s) => ({ linkMode: on ?? !s.linkMode })),
 }));

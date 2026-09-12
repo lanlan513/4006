@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import EChart, { darkTooltip, axisStyle, splitLine } from '../components/EChart';
+import PyramidChart from '../components/PyramidChart';
 import { api, CountryDetail, regionName } from '../api';
-import { fmtDollars, fmtGrowth, fmtPopulation, fmtCompact, fmtTradeB } from '../format';
+import { fmtDollars, fmtGrowth, fmtPopulation, fmtCompact, fmtTradeB, fmtPercent } from '../format';
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
@@ -19,11 +20,13 @@ export default function CountryProfile() {
   const navigate = useNavigate();
   const [data, setData] = useState<CountryDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [structYear, setStructYear] = useState<number | null>(null);
 
   useEffect(() => {
     let alive = true;
     setData(null);
     setError(null);
+    setStructYear(null);
     if (code) {
       api.country(code)
         .then((result) => alive && setData(result))
@@ -61,6 +64,12 @@ export default function CountryProfile() {
     );
   }
   const years = timeseries.map((t) => t.year);
+  // 年龄结构查看年份：默认最新年，可由用户切换
+  const effStructYear = structYear ?? latestYear;
+  const structMetric = timeseries.find((t) => t.year === effStructYear) ?? latest;
+  const workingShare = Math.max(0, 100 - structMetric.youthRate - structMetric.agingRate);
+  const dependencyRatio =
+    workingShare > 0 ? ((structMetric.youthRate + structMetric.agingRate) / workingShare) * 100 : 0;
   const exports = products.filter((p) => p.flowType === 'ex');
   const imports = products.filter((p) => p.flowType === 'im');
   const maxTrade = Math.max(
@@ -189,6 +198,71 @@ export default function CountryProfile() {
             <h4>出口与进口</h4>
             <p>货物贸易额，美元 · 时间轴同口径</p>
             <EChart option={tradeOption} />
+          </div>
+        </div>
+
+        <div className="section-title">人口年龄结构</div>
+        <div className="chart-grid">
+          <div className="chart-card">
+            <div className="struct-head">
+              <div>
+                <h4>人口金字塔 · {effStructYear} 年</h4>
+                <p>0-14 岁 · 15-64 岁劳动年龄 · 65 岁及以上，占总人口比重</p>
+              </div>
+              <div className="year-switch">
+                {years.map((y) => (
+                  <button
+                    key={y}
+                    className={`year-chip ${y === effStructYear ? 'active' : ''}`}
+                    onClick={() => setStructYear(y)}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <PyramidChart
+              youth={structMetric.youthRate}
+              working={workingShare}
+              aging={structMetric.agingRate}
+              height={210}
+            />
+          </div>
+          <div className="chart-card">
+            <h4>结构解读 · {effStructYear} 年</h4>
+            <p>劳动年龄占比与抚养压力随年份切换联动更新</p>
+            <div className="struct-stats">
+              <div className="struct-stat">
+                <span className="struct-dot" style={{ background: '#57a9c9' }} />
+                <div className="ss-label">0-14 岁 少儿</div>
+                <div className="ss-value">{fmtPercent(structMetric.youthRate)}</div>
+              </div>
+              <div className="struct-stat">
+                <span className="struct-dot" style={{ background: '#e0a94f' }} />
+                <div className="ss-label">15-64 岁 劳动年龄</div>
+                <div className="ss-value">{fmtPercent(workingShare)}</div>
+              </div>
+              <div className="struct-stat">
+                <span className="struct-dot" style={{ background: '#c98a6d' }} />
+                <div className="ss-label">65 岁及以上</div>
+                <div className="ss-value">{fmtPercent(structMetric.agingRate)}</div>
+              </div>
+              <div className="struct-stat">
+                <span className="struct-dot" style={{ background: '#8b97a9' }} />
+                <div className="ss-label">总抚养比（少儿+老龄 / 劳动年龄）</div>
+                <div className="ss-value">{dependencyRatio.toFixed(1)}%</div>
+              </div>
+              <div className="struct-stat">
+                <span className="struct-dot" style={{ background: '#7fb069' }} />
+                <div className="ss-label">劳动力规模</div>
+                <div className="ss-value">{fmtPopulation(structMetric.laborForce)}</div>
+              </div>
+              <div className="struct-stat">
+                <span className="struct-dot" style={{ background: '#b48ac9' }} />
+                <div className="ss-label">人均 GDP</div>
+                <div className="ss-value">{fmtDollars(structMetric.gdpPerCapita)}</div>
+              </div>
+            </div>
           </div>
         </div>
 

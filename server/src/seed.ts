@@ -45,8 +45,8 @@ export function seedAll(db: Database.Database) {
     const insMetric = db.prepare(
       `INSERT INTO country_metrics
        (country_code, year, gdp, gdp_growth, population, gdp_per_capita, exports, imports,
-        pop_growth, aging_rate, urban_rate, labor_force)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        pop_growth, aging_rate, urban_rate, labor_force, youth_rate)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const m of METRICS) {
       YEARS.forEach((year, i) => {
@@ -66,7 +66,8 @@ export function seedAll(db: Database.Database) {
           round(m.popGrowth[i], 1),
           round(m.aging[i], 1),
           round(m.urban[i], 1),
-          round(m.labor[i] * 1e6)
+          round(m.labor[i] * 1e6),
+          round(m.youth[i], 1)
         );
       });
     }

@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS country_metrics (
   aging_rate     REAL,        -- 老龄化率（65+ 占比 %）
   urban_rate     REAL,        -- 城市化率（城镇人口占比 %）
   labor_force    REAL,        -- 劳动力规模（人）
+  youth_rate     REAL,        -- 0-14 岁人口占比 %（15-64 岁占比 = 100 − youth − aging）
   PRIMARY KEY (country_code, year)
 );
 
@@ -109,6 +110,13 @@ export function getDb(): Database.Database {
       ALTER TABLE country_metrics ADD COLUMN urban_rate REAL;
       ALTER TABLE country_metrics ADD COLUMN labor_force REAL;
     `);
+    seedAll(db);
+  }
+  // 年龄结构迁移：缺少 0-14 岁占比列时补列并重新播种
+  const colsAfter = db.prepare('PRAGMA table_info(country_metrics)').all() as { name: string }[];
+  if (!colsAfter.some((c) => c.name === 'youth_rate')) {
+    console.log('[db] 检测到旧版数据结构，补充年龄结构列并重新播种…');
+    db.exec('ALTER TABLE country_metrics ADD COLUMN youth_rate REAL');
     seedAll(db);
   }
   const { c } = db.prepare('SELECT COUNT(*) AS c FROM countries').get() as { c: number };

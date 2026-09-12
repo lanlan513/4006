@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { CountryListItem } from '../api';
 import { regionName } from '../api';
 import { fmtDollars, fmtGrowth, fmtPercent, fmtPopulation } from '../format';
+import PyramidChart from './PyramidChart';
 
 interface Props {
   country: CountryListItem;
@@ -49,6 +50,19 @@ export default function CountryCard({ country, year, onClose, onFocusNetwork }: 
         <Stat label="城市化率" value={fmtPercent(country.urbanRate)} />
         <Stat label="劳动力规模" value={fmtPopulation(country.laborForce)} />
       </div>
+
+      {country.youthRate != null && country.agingRate != null && (
+        <>
+          <div className="card-section-title">人口年龄结构 · {year}</div>
+          <PyramidChart
+            youth={country.youthRate}
+            working={Math.max(0, 100 - country.youthRate - country.agingRate)}
+            aging={country.agingRate}
+            height={132}
+            compact
+          />
+        </>
+      )}
 
       <div className="card-actions">
         <Link to={`/country/${country.code}`} className="btn-primary">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import EChart, { darkTooltip, axisStyle, splitLine } from './EChart';
 import { api, CountryDetail, CountryListItem } from '../api';
 import { fmtCompact, fmtMetric, fmtPopulation } from '../format';
@@ -7,6 +7,8 @@ import { POP_METRICS } from '../store';
 interface Props {
   /** 当前选中国家（含当年指标快照），null 时显示引导提示 */
   country: CountryListItem | null;
+  /** 全部国家（双国对比的对照国选择器用） */
+  allCountries: CountryListItem[];
   year: number;
   onClose: () => void;
 }
@@ -31,9 +33,17 @@ function yearMarkLine(year: number) {
   };
 }
 
-export default function SplitPanel({ country, year, onClose }: Props) {
+/** 双国对比配色：A 国琥珀金，B 国青蓝 */
+const COLOR_A = '#e0a94f';
+const COLOR_B = '#57a9c9';
+
+export default function SplitPanel({ country, allCountries, year, onClose }: Props) {
   const [detail, setDetail] = useState<CountryDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [compareOn, setCompareOn] = useState(false);
+  const [peerCode, setPeerCode] = useState<string | null>(null);
+  const [peerDetail, setPeerDetail] = useState<CountryDetail | null>(null);
+  const [peerError, setPeerError] = useState<string | null>(null);
 
   // 历史序列只在选中国家变化时重新拉取；年份切换仅移动标记线，保证平滑过渡
   useEffect(() => {
@@ -54,8 +64,32 @@ export default function SplitPanel({ country, year, onClose }: Props) {
     };
   }, [country?.code]);
 
+  // 对照国变化时拉取其历史序列；主选国变化时剔除同名对照国
+  useEffect(() => {
+    if (peerCode && peerCode === country?.code) setPeerCode(null);
+  }, [country?.code, peerCode]);
+
+  useEffect(() => {
+    if (!compareOn || !peerCode) {
+      setPeerDetail(null);
+      setPeerError(null);
+      return;
+    }
+    let alive = true;
+    setPeerDetail(null);
+    setPeerError(null);
+    api
+      .country(peerCode)
+      .then((r) => alive && setPeerDetail(r))
+      .catch((e: Error) => alive && setPeerError(e.message));
+    return () => {
+      alive = false;
+    };
+  }, [compareOn, peerCode]);
+
   const ts = detail?.timeseries ?? [];
   const years = ts.map((t) => t.year);
+  const peerName = allCountries.find((c) => c.code === peerCode)?.name ?? '';
 
   const popOption = {
     tooltip: {
@@ -179,6 +213,75 @@ export default function SplitPanel({ country, year, onClose }: Props) {
     ],
   };
 
+  /** 双国对比：同一张双轴折线图叠加两国 GDP 增速（实线，左轴）与人口增长率（虚线，右轴） */
+  const compareOption = useMemo(() => {
+    if (!detail || !peerDetail) return null;
+    const a = detail.timeseries;
+    const b = peerDetail.timeseries;
+    const cmpYears = a.map((t) => t.year);
+    const bByYear = new Map(b.map((t) => [t.year, t]));
+    const nameA = detail.country.name;
+    const nameB = peerDetail.country.name;
+    const growthLine = (
+      name: string,
+      color: string,
+      data: (number | null)[],
+      dashed: boolean,
+      yAxisIndex: number,
+      withMark = false
+    ) => ({
+      name,
+      type: 'line',
+      smooth: true,
+      symbolSize: 6,
+      yAxisIndex,
+      data,
+      lineStyle: { color, width: dashed ? 1.8 : 2.4, type: dashed ? ('dashed' as const) : ('solid' as const) },
+      itemStyle: { color },
+      ...(withMark ? { markLine: yearMarkLine(year) } : {}),
+    });
+    return {
+      tooltip: {
+        trigger: 'axis',
+        ...darkTooltip,
+        valueFormatter: (v: unknown) => (v == null ? '—' : `${Number(v).toFixed(1)}%`),
+      },
+      legend: {
+        data: [`${nameA} GDP`, `${nameA} 人口`, `${nameB} GDP`, `${nameB} 人口`],
+        textStyle: { color: '#8b97a9', fontSize: 10.5 },
+        top: 0,
+        right: 0,
+        itemWidth: 14,
+      },
+      grid: { left: 44, right: 44, top: 40, bottom: 28 },
+      xAxis: { type: 'category', data: cmpYears, boundaryGap: false, ...axisStyle },
+      yAxis: [
+        {
+          type: 'value',
+          name: 'GDP 增速',
+          nameTextStyle: { color: '#8b97a9', fontSize: 10 },
+          ...axisStyle,
+          splitLine,
+          axisLabel: { ...axisStyle.axisLabel, formatter: '{value}%' },
+        },
+        {
+          type: 'value',
+          name: '人口增长',
+          nameTextStyle: { color: '#8b97a9', fontSize: 10 },
+          ...axisStyle,
+          splitLine: { show: false },
+          axisLabel: { ...axisStyle.axisLabel, formatter: '{value}%' },
+        },
+      ],
+      series: [
+        growthLine(`${nameA} GDP`, COLOR_A, a.map((t) => t.gdpGrowth), false, 0, true),
+        growthLine(`${nameA} 人口`, COLOR_A, a.map((t) => t.popGrowth), true, 1),
+        growthLine(`${nameB} GDP`, COLOR_B, cmpYears.map((y) => bByYear.get(y)?.gdpGrowth ?? null), false, 0),
+        growthLine(`${nameB} 人口`, COLOR_B, cmpYears.map((y) => bByYear.get(y)?.popGrowth ?? null), true, 1),
+      ],
+    };
+  }, [detail, peerDetail, year]);
+
   return (
     <aside className="split-panel">
       <div className="split-head">
@@ -232,6 +335,54 @@ export default function SplitPanel({ country, year, onClose }: Props) {
                   {years[0]}–{years[years.length - 1]} · 双 Y 轴 · 虚线标记当前年份 {year}
                 </p>
                 <EChart option={gdpOption} height={250} notMerge={false} />
+              </div>
+
+              {/* 双国对比 */}
+              <div className="split-chart-card">
+                <div className="compare-head">
+                  <div>
+                    <h4>双国对比 · 增长率轨迹</h4>
+                    <p>实线 = GDP 增速（左轴）· 虚线 = 人口增长率（右轴）</p>
+                  </div>
+                  <button
+                    className={`switch ${compareOn ? 'on' : ''}`}
+                    onClick={() => setCompareOn((v) => !v)}
+                    title="切换双国对比"
+                  />
+                </div>
+                {compareOn && (
+                  <>
+                    <div className="compare-selectors">
+                      <span className="compare-chip a">{country.name}</span>
+                      <span className="compare-vs">vs</span>
+                      <select
+                        className="compare-select"
+                        value={peerCode ?? ''}
+                        onChange={(e) => setPeerCode(e.target.value || null)}
+                      >
+                        <option value="">选择对照国…</option>
+                        {allCountries
+                          .filter((c) => c.code !== country.code)
+                          .map((c) => (
+                            <option key={c.code} value={c.code}>
+                              {c.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    {!peerCode ? (
+                      <div className="compare-hint">选择一个对照国家，叠加显示两国增长率历史轨迹。</div>
+                    ) : peerError ? (
+                      <div className="compare-hint" role="alert">
+                        对照国数据加载失败:{peerError}
+                      </div>
+                    ) : !compareOption ? (
+                      <div className="compare-hint">正在加载 {peerName} 的历史数据…</div>
+                    ) : (
+                      <EChart option={compareOption} height={260} notMerge={false} />
+                    )}
+                  </>
+                )}
               </div>
             </>
           )}
