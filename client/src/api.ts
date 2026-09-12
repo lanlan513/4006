@@ -125,10 +125,32 @@ export interface ResourceFeatureCollection {
   features: ResourceFeature[];
 }
 
+/** 国家在某资源上的角色：producer 主要生产国 / exporter 主要出口国 / dependent 高依赖进口国 */
+export type ResourceRoleKey = 'producer' | 'exporter' | 'dependent';
+
+export interface ResourceRole {
+  code: string; // ISO3
+  name: string;
+  isoNumeric: string;
+  annualProduction: number | null;
+  exportShare: number | null;
+  importDependency: number | null;
+  roles: ResourceRoleKey[];
+}
+
+export interface ResourceRoleNotes {
+  production: string;
+  export: string;
+  dependency: string;
+  yearLabel: string;
+}
+
 export interface ResourceDetail {
   resource: Omit<ResourceBrief, 'siteCount' | 'consumerCount'>;
   production: ResourceFeatureCollection; // 产地分布
   consumption: ResourceFeatureCollection; // 主要消费国
+  roles: ResourceRole[]; // 三类国家角色（后端按阈值动态判定）
+  roleNotes: ResourceRoleNotes | null;
 }
 
 export class ApiError extends Error {

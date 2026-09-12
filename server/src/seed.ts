@@ -10,6 +10,7 @@ import { TRADE_FLOWS } from './data/trade.js';
 import { PRODUCTS, COUNTRY_PRODUCTS } from './data/products.js';
 import { CHAINS } from './data/chains.js';
 import { RESOURCES } from './data/resources.js';
+import { RESOURCE_ROLES } from './data/resourceRoles.js';
 import { DB_PATH, getDb } from './db.js';
 
 /** 在三个锚点年份 (2000 / 2010 / 2023) 之间线性插值 */
@@ -127,7 +128,9 @@ export function seedAll(db: Database.Database) {
 
 /** 资源图层行写入：seedAll 与增量播种共用 */
 function seedResourceRows(db: Database.Database) {
-  db.exec('DELETE FROM resource_consumers; DELETE FROM resource_sites; DELETE FROM resources;');
+  db.exec(
+    'DELETE FROM resource_country_roles; DELETE FROM resource_consumers; DELETE FROM resource_sites; DELETE FROM resources;'
+  );
   const insResource = db.prepare(
     'INSERT INTO resources (id, name, unit, color, description) VALUES (?, ?, ?, ?, ?)'
   );
@@ -136,6 +139,11 @@ function seedResourceRows(db: Database.Database) {
   );
   const insConsumer = db.prepare(
     'INSERT INTO resource_consumers (resource_id, country_code, value) VALUES (?, ?, ?)'
+  );
+  const insRole = db.prepare(
+    `INSERT INTO resource_country_roles
+     (resource_id, country_code, annual_production, export_share, import_dependency)
+     VALUES (?, ?, ?, ?, ?)`
   );
   for (const r of RESOURCES) {
     insResource.run(r.id, r.name, r.unit, r.color, r.description);
@@ -146,11 +154,41 @@ function seedResourceRows(db: Database.Database) {
       insConsumer.run(r.id, c.code, c.value);
     }
   }
+  insertResourceRoleRows(db, insRole);
+}
+
+/** 角色行写入（假定 resources 已存在） */
+function insertResourceRoleRows(db: Database.Database, insRole: Database.Statement) {
+  db.exec('DELETE FROM resource_country_roles;');
+  for (const [resourceId, rows] of Object.entries(RESOURCE_ROLES)) {
+    for (const row of rows) {
+      insRole.run(
+        resourceId,
+        row.code,
+        row.annualProduction,
+        row.exportShare,
+        row.importDependency
+      );
+    }
+  }
 }
 
 /** 单独播种资源数据（供已有数据库增量升级使用） */
 export function seedResources(db: Database.Database) {
   const tx = db.transaction(() => seedResourceRows(db));
+  tx();
+}
+
+/** 单独播种资源国家角色数据（供旧库增量升级使用） */
+export function seedResourceRoles(db: Database.Database) {
+  const tx = db.transaction(() => {
+    const insRole = db.prepare(
+      `INSERT INTO resource_country_roles
+       (resource_id, country_code, annual_production, export_share, import_dependency)
+       VALUES (?, ?, ?, ?, ?)`
+    );
+    insertResourceRoleRows(db, insRole);
+  });
   tx();
 }
 

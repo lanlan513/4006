@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import type { Database } from 'better-sqlite3';
 import { getDb } from './db.js';
 import { REGIONS, YEARS } from './data/countries.js';
+import { RESOURCE_ROLE_NOTES } from './data/resourceRoles.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -221,15 +222,69 @@ app.get('/api/resources/:id', (req, res) => {
 
   const consumers = db
     .prepare(
-      `SELECT rc.country_code AS code, c.name, c.lon, c.lat, rc.value
+      `SELECT rc.country_code AS code, c.name, c.iso_numeric AS isoNumeric, c.lon, c.lat, rc.value
        FROM resource_consumers rc
        JOIN countries c ON c.code = rc.country_code
        WHERE rc.resource_id = ? ORDER BY rc.value DESC`
     )
-    .all(id) as { code: string; name: string; lon: number; lat: number; value: number }[];
+    .all(id) as { code: string; name: string; isoNumeric: string; lon: number; lat: number; value: number }[];
+
+  /*
+   * 三类国家角色动态判定（阈值统一，角色不写死在数据里）：
+   *  producer  主要生产国：年产量 ≥ 最大生产国的 6%
+   *  exporter  主要出口国：出口比重 ≥ 15%
+   *  dependent 高依赖进口国：对外依赖度 ≥ 40%
+   */
+  const PRODUCER_MIN = 0.06;
+  const EXPORTER_MIN = 15;
+  const DEPENDENT_MIN = 40;
+
+  const roleRows = db
+    .prepare(
+      `SELECT rr.country_code AS code, c.name, c.iso_numeric AS isoNumeric,
+              rr.annual_production AS annualProduction,
+              rr.export_share AS exportShare,
+              rr.import_dependency AS importDependency
+       FROM resource_country_roles rr
+       JOIN countries c ON c.code = rr.country_code
+       WHERE rr.resource_id = ?`
+    )
+    .all(id) as {
+    code: string;
+    name: string;
+    isoNumeric: string;
+    annualProduction: number | null;
+    exportShare: number | null;
+    importDependency: number | null;
+  }[];
+
+  const maxProduction = roleRows.reduce(
+    (m, r) => Math.max(m, r.annualProduction ?? 0),
+    0
+  );
+  const roles = roleRows
+    .map((r) => {
+      const roles: string[] = [];
+      if (r.annualProduction != null && r.annualProduction >= maxProduction * PRODUCER_MIN) {
+        roles.push('producer');
+      }
+      if (r.exportShare != null && r.exportShare >= EXPORTER_MIN) roles.push('exporter');
+      if (r.importDependency != null && r.importDependency >= DEPENDENT_MIN) {
+        roles.push('dependent');
+      }
+      return { ...r, roles };
+    })
+    .filter((r) => r.roles.length > 0)
+    .sort(
+      (a, b) =>
+        (b.annualProduction ?? 0) - (a.annualProduction ?? 0) ||
+        (b.exportShare ?? 0) - (a.exportShare ?? 0)
+    );
 
   res.json({
     resource,
+    roles,
+    roleNotes: RESOURCE_ROLE_NOTES[id] ?? null,
     production: {
       type: 'FeatureCollection',
       features: sites.map((s) => ({

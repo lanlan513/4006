@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { seedAll, seedResources } from './seed.js';
+import { seedAll, seedResources, seedResourceRoles } from './seed.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = resolve(__dirname, '../data/app.db');
@@ -112,6 +112,16 @@ CREATE TABLE IF NOT EXISTS resource_consumers (
   PRIMARY KEY (resource_id, country_code)
 );
 CREATE INDEX IF NOT EXISTS idx_resource_consumers ON resource_consumers(resource_id);
+
+CREATE TABLE IF NOT EXISTS resource_country_roles (
+  resource_id       TEXT NOT NULL REFERENCES resources(id),
+  country_code      TEXT NOT NULL REFERENCES countries(code),
+  annual_production REAL,          -- 年产量（单位同 resources.unit；水资源为年可再生量）
+  export_share      REAL,          -- 出口比重 %
+  import_dependency REAL,          -- 对外依赖度（净进口 / 消费）%
+  PRIMARY KEY (resource_id, country_code)
+);
+CREATE INDEX IF NOT EXISTS idx_resource_roles ON resource_country_roles(resource_id);
 `;
 
 let _db: Database.Database | null = null;
@@ -135,6 +145,14 @@ export function getDb(): Database.Database {
     if (resourceCount === 0) {
       console.log('[db] 资源数据为空，增量播种资源图层数据…');
       seedResources(db);
+    }
+    // 资源国家角色表为空时增量播种（旧库升级）
+    const { c: roleCount } = db.prepare(
+      'SELECT COUNT(*) AS c FROM resource_country_roles'
+    ).get() as { c: number };
+    if (roleCount === 0) {
+      console.log('[db] 资源国家角色数据为空，增量播种角色标注数据…');
+      seedResourceRoles(db);
     }
   }
   _db = db;
