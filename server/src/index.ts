@@ -189,6 +189,66 @@ app.get('/api/chains/:id', (req, res) => {
   });
 });
 
+/* ---------------- 全球资源地图 ---------------- */
+
+app.get('/api/resources', (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT r.id, r.name, r.unit, r.color, r.description,
+              (SELECT COUNT(*) FROM resource_sites s WHERE s.resource_id = r.id) AS siteCount,
+              (SELECT COUNT(*) FROM resource_consumers c WHERE c.resource_id = r.id) AS consumerCount
+       FROM resources r
+       ORDER BY r.rowid`
+    )
+    .all();
+  res.json({ resources: rows });
+});
+
+/** 资源分布图层：产地与消费国分别以 GeoJSON FeatureCollection 返回 */
+app.get('/api/resources/:id', (req, res) => {
+  const id = String(req.params.id);
+  const resource = db
+    .prepare('SELECT id, name, unit, color, description FROM resources WHERE id = ?')
+    .get(id) as Record<string, unknown> | undefined;
+  if (!resource) return res.status(404).json({ error: 'resource not found' });
+
+  const sites = db
+    .prepare(
+      `SELECT name, country, lon, lat, value
+       FROM resource_sites WHERE resource_id = ? ORDER BY value DESC`
+    )
+    .all(id) as { name: string; country: string; lon: number; lat: number; value: number }[];
+
+  const consumers = db
+    .prepare(
+      `SELECT rc.country_code AS code, c.name, c.lon, c.lat, rc.value
+       FROM resource_consumers rc
+       JOIN countries c ON c.code = rc.country_code
+       WHERE rc.resource_id = ? ORDER BY rc.value DESC`
+    )
+    .all(id) as { code: string; name: string; lon: number; lat: number; value: number }[];
+
+  res.json({
+    resource,
+    production: {
+      type: 'FeatureCollection',
+      features: sites.map((s) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [s.lon, s.lat] },
+        properties: { name: s.name, country: s.country, value: s.value, unit: resource.unit },
+      })),
+    },
+    consumption: {
+      type: 'FeatureCollection',
+      features: consumers.map((c) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [c.lon, c.lat] },
+        properties: { code: c.code, name: c.name, value: c.value, unit: resource.unit },
+      })),
+    },
+  });
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'api route not found' });
 });

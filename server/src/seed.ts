@@ -9,6 +9,7 @@ import { METRICS } from './data/metrics.js';
 import { TRADE_FLOWS } from './data/trade.js';
 import { PRODUCTS, COUNTRY_PRODUCTS } from './data/products.js';
 import { CHAINS } from './data/chains.js';
+import { RESOURCES } from './data/resources.js';
 import { DB_PATH, getDb } from './db.js';
 
 /** 在三个锚点年份 (2000 / 2010 / 2023) 之间线性插值 */
@@ -32,7 +33,6 @@ export function seedAll(db: Database.Database) {
       DELETE FROM country_products; DELETE FROM products;
       DELETE FROM trade_flows; DELETE FROM country_metrics; DELETE FROM countries;
     `);
-
     // 国家
     const insCountry = db.prepare(
       'INSERT INTO countries (code, name, region, iso_numeric, lon, lat) VALUES (?, ?, ?, ?, ?, ?)'
@@ -117,9 +117,41 @@ export function seedAll(db: Database.Database) {
         insEdge.run(ch.id, e.from, e.to, e.fromStage, e.toStage, e.label, e.value);
       }
     }
+
+    // 资源图层（产地 + 消费国）
+    seedResourceRows(db);
   });
   tx();
   db.exec('PRAGMA foreign_keys = ON');
+}
+
+/** 资源图层行写入：seedAll 与增量播种共用 */
+function seedResourceRows(db: Database.Database) {
+  db.exec('DELETE FROM resource_consumers; DELETE FROM resource_sites; DELETE FROM resources;');
+  const insResource = db.prepare(
+    'INSERT INTO resources (id, name, unit, color, description) VALUES (?, ?, ?, ?, ?)'
+  );
+  const insSite = db.prepare(
+    'INSERT INTO resource_sites (resource_id, name, country, lon, lat, value) VALUES (?, ?, ?, ?, ?, ?)'
+  );
+  const insConsumer = db.prepare(
+    'INSERT INTO resource_consumers (resource_id, country_code, value) VALUES (?, ?, ?)'
+  );
+  for (const r of RESOURCES) {
+    insResource.run(r.id, r.name, r.unit, r.color, r.description);
+    for (const s of r.sites) {
+      insSite.run(r.id, s.name, s.country, s.lon, s.lat, s.value);
+    }
+    for (const c of r.consumers) {
+      insConsumer.run(r.id, c.code, c.value);
+    }
+  }
+}
+
+/** 单独播种资源数据（供已有数据库增量升级使用） */
+export function seedResources(db: Database.Database) {
+  const tx = db.transaction(() => seedResourceRows(db));
+  tx();
 }
 
 /** 独立运行：删除旧库后重新播种 */

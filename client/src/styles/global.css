@@ -586,6 +586,99 @@ input[type='range'].year-slider::-webkit-slider-thumb {
   color: var(--text-faint);
   font-size: 13px;
 }
+
+/* ============ 全球资源地图 ============ */
+.resource-map svg,
+.resource-map .heat-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.heat-canvas { pointer-events: none; }
+.resource-map .zoom-controls { bottom: 24px; }
+.points-layer { pointer-events: none; }
+.points-layer .site-node,
+.points-layer .consumer-node { pointer-events: auto; cursor: pointer; }
+.points-layer .site-node:hover circle:last-of-type { stroke: #fff; }
+.points-layer .consumer-node:hover circle:last-of-type { stroke: #fff; }
+
+.resource-panel { width: 252px; }
+.resource-tabs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.resource-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 4px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-dim);
+  transition: all 0.15s;
+}
+.resource-tab:hover { color: var(--text); border-color: var(--border-strong); }
+.resource-tab i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.resource-tab.active { background: rgba(255, 255, 255, 0.05); font-weight: 650; }
+
+.resource-desc {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+.resource-legend {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.resource-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.resource-legend i { flex: none; width: 10px; height: 10px; }
+.resource-legend .lg-site { border-radius: 50%; }
+.resource-legend .lg-consumer { border-radius: 50%; border: 1.5px solid; background: transparent; }
+.resource-legend .lg-heat {
+  border-radius: 50%;
+  opacity: 0.55;
+  filter: blur(2px);
+}
+
+.resource-rank {
+  top: 18px;
+  right: 18px;
+  width: 268px;
+  padding: 14px 16px;
+}
+.rank-row {
+  display: grid;
+  grid-template-columns: 92px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 11.5px;
+}
+.rank-name {
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.rank-bar i { display: block; height: 100%; border-radius: 3px; opacity: 0.85; }
+.rank-value { text-align: right; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.rank-unit { margin-top: 10px; font-size: 10px; color: var(--text-faint); letter-spacing: 0.04em; }
+
 .page-error {
   top: 18px;
   left: 50%;
@@ -616,6 +709,7 @@ input[type='range'].year-slider::-webkit-slider-thumb {
   .page { height: auto; min-height: calc(100% - 58px); }
   .explore-layout { min-height: 720px; }
   .controls-panel { top: 12px; left: 12px; width: calc(100% - 24px); }
+  .resource-rank { display: none; }
   .country-card { top: 178px; right: 12px; width: calc(100% - 24px); max-height: calc(100% - 300px); }
   .timeline-bar { bottom: 12px; padding: 12px 14px 10px; }
   .timeline-top { gap: 10px; }

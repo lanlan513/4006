@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { seedAll } from './seed.js';
+import { seedAll, seedResources } from './seed.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = resolve(__dirname, '../data/app.db');
@@ -85,6 +85,33 @@ CREATE TABLE IF NOT EXISTS chain_edges (
 );
 CREATE INDEX IF NOT EXISTS idx_chain_nodes ON chain_nodes(chain_id);
 CREATE INDEX IF NOT EXISTS idx_chain_edges ON chain_edges(chain_id);
+
+CREATE TABLE IF NOT EXISTS resources (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  unit        TEXT NOT NULL,    -- 生产量 / 消费量计量单位
+  color       TEXT NOT NULL,    -- 图层主题色
+  description TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS resource_sites (
+  resource_id TEXT NOT NULL REFERENCES resources(id),
+  name        TEXT NOT NULL,    -- 产地名称（油田 / 矿区 / 流域等）
+  country     TEXT NOT NULL,    -- 所在国家 / 地区（展示用）
+  lon         REAL NOT NULL,
+  lat         REAL NOT NULL,
+  value       REAL NOT NULL,    -- 生产量
+  PRIMARY KEY (resource_id, name)
+);
+CREATE INDEX IF NOT EXISTS idx_resource_sites ON resource_sites(resource_id);
+
+CREATE TABLE IF NOT EXISTS resource_consumers (
+  resource_id  TEXT NOT NULL REFERENCES resources(id),
+  country_code TEXT NOT NULL REFERENCES countries(code),
+  value        REAL NOT NULL,   -- 消费量
+  PRIMARY KEY (resource_id, country_code)
+);
+CREATE INDEX IF NOT EXISTS idx_resource_consumers ON resource_consumers(resource_id);
 `;
 
 let _db: Database.Database | null = null;
@@ -100,6 +127,15 @@ export function getDb(): Database.Database {
     console.log('[db] 数据库为空，开始写入种子数据…');
     seedAll(db);
     console.log('[db] 种子数据写入完成。');
+  } else {
+    // 兼容已有数据库：资源表为空时单独增量播种，避免整库重建
+    const { c: resourceCount } = db.prepare('SELECT COUNT(*) AS c FROM resources').get() as {
+      c: number;
+    };
+    if (resourceCount === 0) {
+      console.log('[db] 资源数据为空，增量播种资源图层数据…');
+      seedResources(db);
+    }
   }
   _db = db;
   return db;

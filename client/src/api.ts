@@ -93,6 +93,44 @@ export interface ChainDetail {
   edges: ChainEdge[];
 }
 
+/* ---------- 全球资源地图 ---------- */
+
+export interface ResourceBrief {
+  id: string;
+  name: string;
+  unit: string;
+  color: string;
+  description: string;
+  siteCount: number;
+  consumerCount: number;
+}
+
+/** GeoJSON Point Feature 的属性（产地 / 消费国共用） */
+export interface ResourcePointProps {
+  name: string;
+  country?: string; // 产地所在国家 / 地区
+  code?: string; // 消费国 ISO3
+  value: number; // 生产量 / 消费量
+  unit: string;
+}
+
+export interface ResourceFeature {
+  type: 'Feature';
+  geometry: { type: 'Point'; coordinates: [number, number] };
+  properties: ResourcePointProps;
+}
+
+export interface ResourceFeatureCollection {
+  type: 'FeatureCollection';
+  features: ResourceFeature[];
+}
+
+export interface ResourceDetail {
+  resource: Omit<ResourceBrief, 'siteCount' | 'consumerCount'>;
+  production: ResourceFeatureCollection; // 产地分布
+  consumption: ResourceFeatureCollection; // 主要消费国
+}
+
 export class ApiError extends Error {
   status: number;
   url: string;
@@ -138,6 +176,8 @@ export const api = {
     ),
   chains: () => get<{ chains: ChainBrief[] }>('/api/chains'),
   chain: (id: string) => get<ChainDetail>(`/api/chains/${id}`),
+  resources: () => get<{ resources: ResourceBrief[] }>('/api/resources'),
+  resource: (id: string) => get<ResourceDetail>(`/api/resources/${id}`),
 };
 
 export const REGION_NAMES: Record<string, string> = {
