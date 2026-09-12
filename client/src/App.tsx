@@ -1,6 +1,7 @@
 import { Link, Route, Routes, useLocation } from 'react-router-dom';
 import Explore from './pages/Explore';
 import CountryProfile from './pages/CountryProfile';
+import Compare from './pages/Compare';
 import ChainPage from './pages/ChainPage';
 
 function Header() {
@@ -16,6 +17,13 @@ function Header() {
       <nav className="nav-links">
         <Link to="/" className={`nav-link ${pathname === '/' ? 'active' : ''}`}>
           探索地图
+        </Link>
+        <Link
+          to="/compare"
+          className={`nav-link ${pathname.startsWith('/compare') ? 'active' : ''}`}
+          title="并排对比多个国家的核心经济指标"
+        >
+          国家对比
         </Link>
         <Link
           to="/chain/oil"
@@ -36,6 +44,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Explore />} />
         <Route path="/country/:code" element={<CountryProfile />} />
+        <Route path="/compare" element={<Compare />} />
         <Route path="/chain/:id" element={<ChainPage />} />
       </Routes>
     </>

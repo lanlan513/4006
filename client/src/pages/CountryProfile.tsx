@@ -7,11 +7,35 @@ import MetricCards from '../components/MetricCards';
 import GlobalPosition from '../components/GlobalPosition';
 import TrendCharts from '../components/TrendCharts';
 import TradeComboCharts from '../components/TradeComboCharts';
+import Timeline from '../components/Timeline';
 import { regionName } from '../api';
 import type { CountryProfile as ProfileData } from '../schemas';
 import { useCountryProfile } from '../hooks/useCountryProfile';
 import { useCountryRoute } from '../hooks/useCountryRoute';
+import { useSupportedYears } from '../meta';
 import { fmtCompact, fmtTradeB } from '../format';
+
+/** 画像页顶部入口：返回地图视图（携带国家 + 年份，地图恢复定位与年份）；国家对比 */
+function ProfileActions({ countryCode, year }: { countryCode: string; year: number }) {
+  return (
+    <div className="profile-actions">
+      <Link
+        to={`/?c=${countryCode}&year=${year}`}
+        className="btn-ghost"
+        title="回到世界地图，当前国家保持高亮"
+      >
+        <span className="arrow">←</span> 返回地图视图
+      </Link>
+      <Link
+        to={`/compare?c=${countryCode}&year=${year}`}
+        className="btn-primary"
+        title="把该国加入国家对比"
+      >
+        国家对比 Compare <span className="arrow">⇄</span>
+      </Link>
+    </div>
+  );
+}
 
 /** 用户请求了未收录年份时的统一提示（加载 / 空态 / 成功各分支均可见） */
 function YearNotice({ correction }: { correction: { requested: number; actual: number } | null }) {
@@ -143,9 +167,7 @@ function ProfileContent({ data, onOpenCountry }: {
 
   return (
     <div className="profile">
-      <Link to={`/?c=${country.code}`} className="back-link">
-        ← 返回探索地图
-      </Link>
+      <ProfileActions countryCode={country.code} year={viewYear} />
 
       <div className="profile-head">
         <div>
@@ -317,18 +339,31 @@ function ProfileContent({ data, onOpenCountry }: {
 export default function CountryProfile() {
   const navigate = useNavigate();
 
-  // 统一解析 URL 参数与全局状态：返回当前 countryCode、唯一生效年份及年份纠正信息
-  const { countryCode, year, correction } = useCountryRoute();
+  // 统一解析 URL 参数与全局状态：返回当前 countryCode、唯一生效年份、年份纠正信息与切年入口
+  const { countryCode, year, correction, changeYear } = useCountryRoute();
+  const supportedYears = useSupportedYears();
 
-  // 统一数据流：countryCode / year 任一变化都会重新请求 /api/country-profile
+  // 统一数据流：countryCode / year 任一变化都会重新求值（命中缓存则同步出画、不发请求）
   const { status, data, errorMessage, retry } = useCountryProfile(countryCode, year);
 
   const openCountry = (next: string) => navigate(`/country/${next}?year=${year}`);
 
   const backToMap = (
-    <Link to={`/?c=${countryCode ?? ''}`} className="btn-ghost error-back">
-      返回探索地图
+    <Link to={`/?c=${countryCode ?? ''}&year=${year}`} className="btn-ghost error-back">
+      返回地图视图
     </Link>
+  );
+
+  // 画像页底部时间轴：用户拖动 / 点刻度 push 历史（可逐年后退），自动播放 replace
+  const timelineDock = (
+    <div className="timeline-dock">
+      <Timeline
+        years={supportedYears}
+        value={year}
+        onChange={(y, source) => changeYear(y, source === 'user' ? 'push' : 'replace')}
+        hint="拖动时间轴切换画像年份，地址栏与世界地图高亮将同步更新"
+      />
+    </div>
   );
 
   /* ---------- 缺少有效 countryCode（URL 参数异常）：不发请求，直接空态 ---------- */
@@ -351,6 +386,7 @@ export default function CountryProfile() {
       <div className="page">
         <YearNotice correction={correction} />
         <ProfileSkeleton />
+        {timelineDock}
       </div>
     );
   }
@@ -367,6 +403,7 @@ export default function CountryProfile() {
           year={year}
           actions={backToMap}
         />
+        {timelineDock}
       </div>
     );
   }
@@ -390,6 +427,7 @@ export default function CountryProfile() {
             </>
           }
         />
+        {timelineDock}
       </div>
     );
   }
@@ -406,6 +444,7 @@ export default function CountryProfile() {
           year={year}
           actions={backToMap}
         />
+        {timelineDock}
       </div>
     );
   }
@@ -415,6 +454,7 @@ export default function CountryProfile() {
     <div className="page">
       <YearNotice correction={correction} />
       <ProfileContent data={data} onOpenCountry={openCountry} />
+      {timelineDock}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import WorldMap, { RAMP, metricValue } from '../components/WorldMap';
 import Timeline from '../components/Timeline';
 import CountryCard from '../components/CountryCard';
 import { api, CountryListItem, TradeFlow } from '../api';
 import { useAtlas, METRICS } from '../store';
+import { useExploreRoute } from '../hooks/useExploreRoute';
 import { fmtDollars } from '../format';
 
 export default function Explore() {
@@ -13,7 +13,13 @@ export default function Explore() {
   const [countries, setCountries] = useState<CountryListItem[]>([]);
   const [flows, setFlows] = useState<TradeFlow[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [searchParams] = useSearchParams();
+
+  // URL ↔ 全局状态双向同步（?year= / ?c=），支持带参跳转与浏览器前进后退还原
+  const { years: routeYears, focusCode, changeYear } = useExploreRoute();
+
+  useEffect(() => {
+    setYears(routeYears);
+  }, [routeYears]);
 
   useEffect(() => {
     api.meta().then((m) => {
@@ -47,11 +53,10 @@ export default function Explore() {
     };
   }, [networkOn, year, selected]);
 
-  // 支持 /?c=CODE 从画像页回到地图并定位
+  // 支持 /?c=CODE 从画像页 / 对比页回到地图并定位高亮（含前进后退还原）
   useEffect(() => {
-    const c = searchParams.get('c');
-    if (c) setSelected(c);
-  }, [searchParams, setSelected]);
+    if (focusCode) setSelected(focusCode.toUpperCase());
+  }, [focusCode, setSelected]);
 
   const selectedCountry = useMemo(
     () => countries.find((c) => c.code === selected) ?? null,
@@ -162,7 +167,12 @@ export default function Explore() {
           />
         )}
 
-        <Timeline years={years} value={year} onChange={setYear} globalGdp={globalGdp} />
+        <Timeline
+          years={years}
+          value={year}
+          onChange={(y, source) => changeYear(y, source === 'user' ? 'push' : 'replace')}
+          globalGdp={globalGdp}
+        />
       </div>
     </div>
   );

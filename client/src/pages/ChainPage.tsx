@@ -3,10 +3,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import WorldMap, { STAGE_COLORS, stageColor } from '../components/WorldMap';
 import ChainFlow from '../components/ChainFlow';
 import { api, ChainBrief, ChainDetail, CountryListItem } from '../api';
+import { useAtlas } from '../store';
 
 export default function ChainPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // 从产业链节点进入画像时携带全局年份，画像页深链与地址栏口径一致
+  const year = useAtlas((s) => s.year);
+  const openCountry = (code: string) => navigate(`/country/${code}?year=${year}`);
   const [chains, setChains] = useState<ChainBrief[]>([]);
   const [detail, setDetail] = useState<ChainDetail | null>(null);
   const [countries, setCountries] = useState<CountryListItem[]>([]);
@@ -48,7 +52,7 @@ export default function ChainPage() {
   return (
     <div className="page">
       <div className="chain-page">
-        <Link to="/" className="back-link">
+        <Link to={`/?year=${year}`} className="back-link">
           ← 返回探索地图
         </Link>
 
@@ -84,7 +88,7 @@ export default function ChainPage() {
             </div>
 
             {/* 阶段流程图 */}
-            <ChainFlow chain={detail} onNodeClick={(code) => navigate(`/country/${code}`)} />
+            <ChainFlow chain={detail} onNodeClick={openCountry} />
 
             {/* 地图分布 */}
             <div className="chain-map-card">
@@ -97,7 +101,7 @@ export default function ChainPage() {
                   selected={null}
                   onSelect={() => {}}
                   chain={{ stages: detail.chain.stages, nodes: detail.nodes, edges: detail.edges }}
-                  onNodeClick={(code) => navigate(`/country/${code}`)}
+                  onNodeClick={openCountry}
                 />
               </div>
               <div className="stage-legend">

@@ -3,11 +3,18 @@ import { useEffect, useRef, useState } from 'react';
 interface Props {
   years: number[];
   value: number;
-  onChange: (year: number) => void;
+  /**
+   * 年份变化回调。
+   * source 区分触发来源：'user'（滑块 / 刻度点击）需要写入浏览器历史，
+   * 前进后退可逐年回溯；'play'（自动播放）只替换当前历史项，避免历史栈被刷屏。
+   */
+  onChange: (year: number, source: 'user' | 'play') => void;
   globalGdp?: number | null;
+  /** 底部说明文案（探索页与画像页口径不同） */
+  hint?: string;
 }
 
-export default function Timeline({ years, value, onChange, globalGdp }: Props) {
+export default function Timeline({ years, value, onChange, globalGdp, hint }: Props) {
   const [playing, setPlaying] = useState(false);
   const timer = useRef<number | null>(null);
   const idx = Math.max(0, years.indexOf(value));
@@ -19,7 +26,7 @@ export default function Timeline({ years, value, onChange, globalGdp }: Props) {
         if (i >= years.length - 1) {
           setPlaying(false);
         } else {
-          onChange(years[i + 1]);
+          onChange(years[i + 1], 'play');
         }
       }, 1600);
     }
@@ -30,7 +37,7 @@ export default function Timeline({ years, value, onChange, globalGdp }: Props) {
   }, [playing, value]);
 
   const togglePlay = () => {
-    if (!playing && idx >= years.length - 1) onChange(years[0]);
+    if (!playing && idx >= years.length - 1) onChange(years[0], 'play');
     setPlaying((p) => !p);
   };
 
@@ -61,7 +68,7 @@ export default function Timeline({ years, value, onChange, globalGdp }: Props) {
             style={{ ['--fill' as string]: `${fillPct}%` }}
             onChange={(e) => {
               setPlaying(false);
-              onChange(years[Number(e.target.value)]);
+              onChange(years[Number(e.target.value)], 'user');
             }}
           />
           <div className="timeline-ticks">
@@ -71,7 +78,7 @@ export default function Timeline({ years, value, onChange, globalGdp }: Props) {
                 className={`tick ${y === value ? 'active' : ''}`}
                 onClick={() => {
                   setPlaying(false);
-                  onChange(y);
+                  onChange(y, 'user');
                 }}
               >
                 {y}
@@ -80,7 +87,7 @@ export default function Timeline({ years, value, onChange, globalGdp }: Props) {
           </div>
         </div>
       </div>
-      <div className="timeline-hint">拖动或播放时间轴，观察全球经济重心的迁移与贸易网络的扩张</div>
+      <div className="timeline-hint">{hint ?? '拖动或播放时间轴，观察全球经济重心的迁移与贸易网络的扩张'}</div>
     </div>
   );
 }

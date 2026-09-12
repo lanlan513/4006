@@ -17,16 +17,23 @@ export interface CountryRouteState {
   year: number;
   /** 用户原始请求年份不被支持时给出纠正信息；正常情况为 null */
   correction: { requested: number; actual: number } | null;
+  /**
+   * 画像页内时间轴的统一切年入口：
+   * 同时收敛「本地状态 + 全局 store + 地址栏」。
+   * - 'user'（拖动滑块 / 点击刻度）：push 一条历史记录，浏览器后退可逐年回溯；
+   * - 'replace'（自动播放、年份纠正等）：只替换当前历史项。
+   */
+  changeYear: (next: number, mode?: 'push' | 'replace') => void;
 }
 
 /**
  * 统一协调「URL 参数 ↔ 全局状态（zustand）」：
  *
  * - 年份只有一个生效值（state），它永远是后端收录的离散年度；
- * - 进入页面 / 路由跳转 / 浏览器前进后退（URL 真实变化）时，以 ?year= 为准
- *   重新初始化（非法时回落全局 store），路由变化在渲染阶段即时生效，
- *   保证第一次 /api/country-profile 请求就命中真实数据年份；
- * - 全局切年（时间轴等入口）立即生效并 replace 回地址栏，URL 旧值不会钉住页面；
+ * - 进入页面 / 路由跳转 / 浏览器前进后退（URL 真实变化，即 popstate）时，
+ *   以 ?year= 为准重新初始化（非法时回落全局 store），路由变化在渲染阶段
+ *   即时生效，保证第一次 /api/country-profile 请求就命中真实数据年份；
+ * - 画像页内切年统一走 changeYear：立即生效并按来源 push/replace 回地址栏；
  * - ?year=2022 这类未收录年份在发请求前吸附到最近年度（2023），store 与地址栏
  *   同步纠正，并通过 correction 持久提示用户，避免“标题 2022 / 数据 2023”的错位；
  * - 自身写入 store / 地址栏产生的回声（echo）不会被误判为新的外部导航。
@@ -58,16 +65,35 @@ export function useCountryRoute(): CountryRouteState {
   const echoUrl = useRef<number | null>(null);
   const echoStore = useRef<number | null>(null);
 
-  const replaceUrlYear = (y: number) => {
+  const writeUrlYear = (y: number, mode: 'push' | 'replace') => {
     const next = new URLSearchParams(searchParams);
     next.set('year', String(y));
     echoUrl.current = y;
-    setSearchParams(next, { replace: true });
+    setSearchParams(next, { replace: mode === 'replace' });
+  };
+
+  /**
+   * 画像页内一切年份变更（时间轴滑块 / 刻度 / 播放）的唯一入口：
+   * 本地年份、全局 store（供地图高亮联动）、URL 三处一次写齐，
+   * 未收录年份先吸附再写入，保证请求参数与地址栏永远一致。
+   */
+  const changeYear = (next: number, mode: 'push' | 'replace' = 'push') => {
+    const normalized = normalizeYear(next, supportedYears);
+    setCorrection(
+      normalized !== next ? { requested: next, actual: normalized } : null
+    );
+    setYear(normalized);
+    navDirty.current = false; // 本次变更由本函数收敛，路由同步 effect 不再重复写
+    if (storeYear !== normalized) {
+      echoStore.current = normalized;
+      setStoreYear(normalized);
+    }
+    if (queryYear !== normalized) writeUrlYear(normalized, mode);
   };
 
   /* ---------- 渲染阶段收敛：只响应“真实外部信号” ---------- */
 
-  // 1) 路由变化（进入、伙伴国跳转、前进后退）。自身 replace 造成的 query 变化是回声。
+  // 1) 路由变化（进入、伙伴国跳转、前进后退）。自身 push/replace 造成的 query 变化是回声。
   if (routeSignal !== prevRouteSignal.current) {
     prevRouteSignal.current = routeSignal;
     const isSelfEcho = queryYear !== null && queryYear === echoUrl.current;
@@ -96,6 +122,7 @@ export function useCountryRoute(): CountryRouteState {
       echoStore.current = null; // 自身 setStoreYear 的回声
       return;
     }
+    // 其它页面（探索地图时间轴）改动全局年份时，画像页跟随，并用 replace 不打扰历史栈
     const normalized = normalizeYear(storeYear, supportedYears);
     setCorrection(
       normalized !== storeYear ? { requested: storeYear, actual: normalized } : null
@@ -105,7 +132,7 @@ export function useCountryRoute(): CountryRouteState {
       echoStore.current = normalized;
       setStoreYear(normalized);
     }
-    if (queryYear !== normalized) replaceUrlYear(normalized);
+    if (queryYear !== normalized) writeUrlYear(normalized, 'replace');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeYear, yearsKey]);
 
@@ -117,7 +144,7 @@ export function useCountryRoute(): CountryRouteState {
       echoStore.current = year;
       setStoreYear(year);
     }
-    if (queryYear !== year) replaceUrlYear(year);
+    if (queryYear !== year) writeUrlYear(year, 'replace');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSignal, year, yearsKey]);
 
@@ -126,5 +153,5 @@ export function useCountryRoute(): CountryRouteState {
     if (countryCode) setSelected(countryCode);
   }, [countryCode, setSelected]);
 
-  return { countryCode, year, correction };
+  return { countryCode, year, correction, changeYear };
 }
