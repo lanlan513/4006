@@ -61,17 +61,25 @@ export function useCountryProfile(countryCode: string | null | undefined, year: 
   const [retryToken, setRetryToken] = useState(0);
   const prevRetryToken = useRef(0);
 
-  // 入参变化在渲染阶段即时收敛：有缓存就立刻换数据，图表无缝更新
+  // 入参变化在渲染阶段即时收敛：有缓存就立刻换数据，图表无缝更新。
+  // 同时立即推进请求序号 —— 不必等 effect 执行，此前在途的旧请求自参数变化
+  // 这一刻起即为过期，防止它在「缓存渲染之后、effect 之前」的窗口内回写覆盖。
   const key = `${countryCode ?? ''}|${year ?? ''}`;
   const prevKey = useRef(key);
   if (key !== prevKey.current) {
     prevKey.current = key;
+    reqSeq.current++;
     const immediate = resolveImmediately(countryCode, year);
     if (immediate) setState(immediate);
     else setState({ status: 'loading', data: null, errorMessage: null, fromCache: false });
   }
 
   useEffect(() => {
+    // 序号推进统一在 effect 入口：包括入参无效 / 缓存命中在内的任何提前返回，
+    // 都会使此前在途的旧请求拿到过期序号；旧响应返回时一律丢弃，
+    // 不会覆盖新选中国家 / 年份（缓存）的数据。
+    const seq = ++reqSeq.current;
+
     // 没有有效入参时不发起请求，交给页面渲染友好空态
     if (!countryCode || !year || !Number.isFinite(year)) {
       setState({ status: 'empty', data: null, errorMessage: null, fromCache: false });
@@ -91,7 +99,6 @@ export function useCountryProfile(countryCode: string | null | undefined, year: 
       }
     }
 
-    const seq = ++reqSeq.current;
     setState((s) =>
       // 重试时保留旧数据可见，避免整块回退为骨架
       s.data ? { ...s, status: 'loading', errorMessage: null } : { status: 'loading', data: null, errorMessage: null, fromCache: false }
