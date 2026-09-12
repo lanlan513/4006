@@ -55,6 +55,9 @@ export default function PyramidChart({ youth, working, aging, height = 190, comp
     yAxis: {
       type: 'category',
       data: GROUPS.map((g) => (compact ? g.short : g.label)),
+      // 类目轴默认首项在底部；反转后 GROUPS 首项（65+）居顶、末项（0-14）居底，
+      // 符合金字塔"上老下小"的阅读习惯
+      inverse: true,
       ...axisStyle,
       axisLabel: { ...axisStyle.axisLabel, fontSize: compact ? 10 : 11 },
       axisLine: { show: false },
