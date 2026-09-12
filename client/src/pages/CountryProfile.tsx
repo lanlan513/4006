@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import EChart, { darkTooltip, axisStyle, splitLine } from '../components/EChart';
 import ProfileSkeleton from '../components/ProfileSkeleton';
@@ -5,6 +6,7 @@ import EmptyState from '../components/EmptyState';
 import MetricCards from '../components/MetricCards';
 import GlobalPosition from '../components/GlobalPosition';
 import TrendCharts from '../components/TrendCharts';
+import TradeComboCharts from '../components/TradeComboCharts';
 import { regionName } from '../api';
 import type { CountryProfile as ProfileData } from '../schemas';
 import { useCountryProfile } from '../hooks/useCountryProfile';
@@ -30,6 +32,17 @@ function ProfileContent({ data, onOpenCountry }: {
   onOpenCountry: (code: string) => void;
 }) {
   const { country, timeseries, summary, products, partners, chains, latestYear, productsYear } = data;
+
+  // 组合图表上抛的选中项：用于联动高亮下方商品 / 伙伴列表的对应行
+  // （hooks 必须位于下方早退之前，保证每次渲染的调用顺序一致）
+  const [pickedProduct, setPickedProduct] = useState<string | null>(null);
+  const [pickedPartner, setPickedPartner] = useState<string | null>(null);
+  // 国家 / 年份切换后清空联动高亮，避免指向已不存在的数据项
+  useEffect(() => {
+    setPickedProduct(null);
+    setPickedPartner(null);
+  }, [country.code, data.year]);
+
   if (!summary) return null; // 由上层 empty 分支兜底，理论上不会进入
 
   // 页面一切年份文案以接口实际返回的 data.year 为准（正常情况下与归一化入参相同），
@@ -168,6 +181,17 @@ function ProfileContent({ data, onOpenCountry }: {
       {/* 近年变化趋势：GDP 增长率 / 人口变化 / 进出口贸易额（近 10 年，数据不足自动降级为文本） */}
       <TrendCharts timeseries={timeseries} />
 
+      {/* 贸易结构图解：出口商品构成（饼图/树图）+ 贸易伙伴对比（水平条形图），
+          点击图表元素上抛事件，联动高亮下方列表的对应行；key 保证切换国家/年份时重置图表内部选中态 */}
+      <TradeComboCharts
+        key={`${country.code}-${viewYear}`}
+        products={products}
+        partners={partners}
+        year={viewYear}
+        onSelectProduct={(p) => setPickedProduct(p?.productCode ?? null)}
+        onSelectPartner={(p) => setPickedPartner(p?.code ?? null)}
+      />
+
       <div className="section-title">主要贸易商品{productTitleSuffix}</div>
       <div className="two-col">
         <div className="list-card">
@@ -176,7 +200,7 @@ function ProfileContent({ data, onOpenCountry }: {
             <p className="card-empty">暂无出口商品结构数据。</p>
           ) : (
             exports.map((p) => (
-              <div className="product-row" key={p.productCode}>
+              <div className={`product-row${p.productCode === pickedProduct ? ' picked' : ''}`} key={p.productCode}>
                 <span className="p-name">{p.productName}</span>
                 <div className="p-bar">
                   <i style={{ width: `${Math.min(100, p.share * 2.2)}%` }} />
@@ -222,7 +246,11 @@ function ProfileContent({ data, onOpenCountry }: {
             <p className="card-empty">{viewYear} 年暂无出口伙伴数据。</p>
           ) : (
             partners.exportPartners.map((p) => (
-              <div className="partner-row" key={p.code} onClick={() => onOpenCountry(p.code)}>
+              <div
+                className={`partner-row${p.code === pickedPartner ? ' picked' : ''}`}
+                key={p.code}
+                onClick={() => onOpenCountry(p.code)}
+              >
                 <span className="p2-name">{p.name}</span>
                 <div className="p-bar">
                   <i style={{ width: `${(p.value / maxTrade) * 100}%` }} />
@@ -238,7 +266,11 @@ function ProfileContent({ data, onOpenCountry }: {
             <p className="card-empty">{viewYear} 年暂无进口伙伴数据。</p>
           ) : (
             partners.importPartners.map((p) => (
-              <div className="partner-row im" key={p.code} onClick={() => onOpenCountry(p.code)}>
+              <div
+                className={`partner-row im${p.code === pickedPartner ? ' picked' : ''}`}
+                key={p.code}
+                onClick={() => onOpenCountry(p.code)}
+              >
                 <span className="p2-name">{p.name}</span>
                 <div className="p-bar">
                   <i style={{ width: `${(p.value / maxTrade) * 100}%` }} />

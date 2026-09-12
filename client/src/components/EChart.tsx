@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import * as echarts from 'echarts/core';
-import { LineChart, BarChart } from 'echarts/charts';
+import { LineChart, BarChart, PieChart, TreemapChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 
-echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
+echarts.use([LineChart, BarChart, PieChart, TreemapChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer]);
 
 /** 深色主题通用配置片段 */
 export const darkTooltip = {
@@ -19,7 +19,31 @@ export const axisStyle = {
 };
 export const splitLine = { lineStyle: { color: 'rgba(150,175,205,0.08)' } };
 
-export default function EChart({ option, height = 250 }: { option: echarts.EChartsCoreOption; height?: number }) {
+/**
+ * ECharts 鼠标事件回调参数（仅声明本项目用到的字段，其余由 ECharts 运行时注入）。
+ * 轴标签事件需对应轴开启 triggerEvent，params.event 为 zrender 事件（含相对画布的 offsetX/offsetY）。
+ */
+export interface ChartEventParams {
+  componentType?: string;
+  seriesIndex?: number;
+  dataIndex?: number;
+  name?: string;
+  value?: unknown;
+  event?: { offsetX?: number; offsetY?: number };
+}
+
+/** 事件绑定：直接传处理函数，或带 query（如 { componentType: 'yAxis' }）精确过滤触发源 */
+export type ChartEventBinding = ((params: ChartEventParams) => void) | {
+  query?: Record<string, unknown>;
+  handler: (params: ChartEventParams) => void;
+};
+
+export default function EChart({ option, height = 250, onEvents }: {
+  option: echarts.EChartsCoreOption;
+  height?: number;
+  /** 图表事件表：{ 事件名: 绑定 | 绑定数组 }，同一事件可挂多个不同 query 的绑定；依赖变化时自动解绑重绑 */
+  onEvents?: Record<string, ChartEventBinding | ChartEventBinding[]>;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const inst = useRef<echarts.ECharts | null>(null);
 
@@ -54,6 +78,24 @@ export default function EChart({ option, height = 250 }: { option: echarts.EChar
       inst.current.setOption(option, true);
     }
   }, [option]);
+
+  useEffect(() => {
+    const chart = inst.current;
+    if (!chart || chart.isDisposed() || !onEvents) return;
+    const entries = Object.entries(onEvents);
+    for (const [name, binding] of entries) {
+      const list = Array.isArray(binding) ? binding : [binding];
+      for (const b of list) {
+        // ECharts 的 on() 类型签名为 (...args: unknown[])，这里收窄为本模块的事件参数类型
+        if (typeof b === 'function') chart.on(name, b as (params: unknown) => void);
+        else chart.on(name, b.query ?? {}, b.handler as (params: unknown) => void);
+      }
+    }
+    return () => {
+      // 统一按事件名解绑（本组件是事件的唯一绑定方），避免在已销毁实例上调用
+      if (!chart.isDisposed()) for (const [name] of entries) chart.off(name);
+    };
+  }, [onEvents]);
 
   return <div ref={ref} style={{ width: '100%', height }} />;
 }
