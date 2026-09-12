@@ -36,3 +36,31 @@ export function fmtGrowth(v: number | null | undefined): string {
   const sign = v > 0 ? '+' : '';
   return `${sign}${v.toFixed(1)}%`;
 }
+
+export function fmtPercent(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return `${v.toFixed(1)}%`;
+}
+
+/** 按地图指标键选择合适的中文格式化方式 */
+export function fmtMetric(key: string, v: number | null | undefined): string {
+  if (v == null) return '—';
+  switch (key) {
+    case 'gdp':
+    case 'gdpPerCapita':
+    case 'trade':
+      return fmtDollars(v);
+    case 'gdpGrowth':
+      return fmtGrowth(v);
+    case 'population':
+    case 'laborForce':
+      return fmtPopulation(v);
+    case 'popGrowth':
+      return fmtGrowth(v);
+    case 'agingRate':
+    case 'urbanRate':
+      return fmtPercent(v);
+    default:
+      return String(v);
+  }
+}

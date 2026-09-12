@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS country_metrics (
   gdp_per_capita REAL,        -- 人均 GDP，美元
   exports        REAL,        -- 货物出口额，美元
   imports        REAL,        -- 货物进口额，美元
+  pop_growth     REAL,        -- 人口年增长率 %
+  aging_rate     REAL,        -- 老龄化率（65+ 占比 %）
+  urban_rate     REAL,        -- 城市化率（城镇人口占比 %）
+  labor_force    REAL,        -- 劳动力规模（人）
   PRIMARY KEY (country_code, year)
 );
 
@@ -95,6 +99,18 @@ export function getDb(): Database.Database {
   const db = new Database(DB_PATH);
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
+  // 旧库迁移：country_metrics 缺少人口指标列时补列并重新播种（种子数据是确定性的，重播安全）
+  const metricCols = db.prepare('PRAGMA table_info(country_metrics)').all() as { name: string }[];
+  if (!metricCols.some((c) => c.name === 'pop_growth')) {
+    console.log('[db] 检测到旧版数据结构，补充人口指标列并重新播种…');
+    db.exec(`
+      ALTER TABLE country_metrics ADD COLUMN pop_growth REAL;
+      ALTER TABLE country_metrics ADD COLUMN aging_rate REAL;
+      ALTER TABLE country_metrics ADD COLUMN urban_rate REAL;
+      ALTER TABLE country_metrics ADD COLUMN labor_force REAL;
+    `);
+    seedAll(db);
+  }
   const { c } = db.prepare('SELECT COUNT(*) AS c FROM countries').get() as { c: number };
   if (c === 0) {
     console.log('[db] 数据库为空，开始写入种子数据…');

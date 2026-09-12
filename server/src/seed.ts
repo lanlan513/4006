@@ -44,8 +44,9 @@ export function seedAll(db: Database.Database) {
     // 宏观指标
     const insMetric = db.prepare(
       `INSERT INTO country_metrics
-       (country_code, year, gdp, gdp_growth, population, gdp_per_capita, exports, imports)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       (country_code, year, gdp, gdp_growth, population, gdp_per_capita, exports, imports,
+        pop_growth, aging_rate, urban_rate, labor_force)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const m of METRICS) {
       YEARS.forEach((year, i) => {
@@ -61,7 +62,11 @@ export function seedAll(db: Database.Database) {
           round(pop),
           round(gdp / pop),
           round(exportsUsd),
-          round(importsUsd)
+          round(importsUsd),
+          round(m.popGrowth[i], 1),
+          round(m.aging[i], 1),
+          round(m.urban[i], 1),
+          round(m.labor[i] * 1e6)
         );
       });
     }

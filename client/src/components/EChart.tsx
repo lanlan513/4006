@@ -19,7 +19,16 @@ export const axisStyle = {
 };
 export const splitLine = { lineStyle: { color: 'rgba(150,175,205,0.08)' } };
 
-export default function EChart({ option, height = 250 }: { option: echarts.EChartsCoreOption; height?: number }) {
+export default function EChart({
+  option,
+  height = 250,
+  notMerge = true,
+}: {
+  option: echarts.EChartsCoreOption;
+  height?: number;
+  /** false 时按合并模式更新，年份切换等增量变化可平滑动画过渡 */
+  notMerge?: boolean;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const inst = useRef<echarts.ECharts | null>(null);
 
@@ -38,8 +47,8 @@ export default function EChart({ option, height = 250 }: { option: echarts.EChar
   }, []);
 
   useEffect(() => {
-    inst.current?.setOption(option, true);
-  }, [option]);
+    inst.current?.setOption(option, notMerge);
+  }, [option, notMerge]);
 
   return <div ref={ref} style={{ width: '100%', height }} />;
 }

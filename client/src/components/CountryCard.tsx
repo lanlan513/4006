@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { CountryListItem } from '../api';
 import { regionName } from '../api';
-import { fmtDollars, fmtGrowth, fmtPopulation } from '../format';
+import { fmtDollars, fmtGrowth, fmtPercent, fmtPopulation } from '../format';
 
 interface Props {
   country: CountryListItem;
@@ -21,6 +21,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'up
 
 export default function CountryCard({ country, year, onClose, onFocusNetwork }: Props) {
   const growthTone = (country.gdpGrowth ?? 0) >= 0 ? 'up' : 'down';
+  const popTone = (country.popGrowth ?? 0) >= 0 ? 'up' : 'down';
 
   return (
     <div className="overlay country-card">
@@ -38,6 +39,15 @@ export default function CountryCard({ country, year, onClose, onFocusNetwork }: 
         <Stat label="人口" value={fmtPopulation(country.population)} />
         <Stat label="出口额" value={fmtDollars(country.exports)} />
         <Stat label="进口额" value={fmtDollars(country.imports)} />
+      </div>
+
+      <div className="card-section-title">人口数据 · {year}</div>
+      <div className="stat-grid">
+        <Stat label="总人口" value={fmtPopulation(country.population)} />
+        <Stat label="人口增长率" value={fmtGrowth(country.popGrowth)} tone={popTone} />
+        <Stat label="老龄化率（65+）" value={fmtPercent(country.agingRate)} />
+        <Stat label="城市化率" value={fmtPercent(country.urbanRate)} />
+        <Stat label="劳动力规模" value={fmtPopulation(country.laborForce)} />
       </div>
 
       <div className="card-actions">

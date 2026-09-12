@@ -13,6 +13,10 @@ export interface CountryListItem {
   gdpPerCapita: number | null;
   exports: number | null;
   imports: number | null;
+  popGrowth: number | null;
+  agingRate: number | null;
+  urbanRate: number | null;
+  laborForce: number | null;
 }
 
 export interface YearMetric {
@@ -23,6 +27,10 @@ export interface YearMetric {
   gdpPerCapita: number;
   exports: number;
   imports: number;
+  popGrowth: number;
+  agingRate: number;
+  urbanRate: number;
+  laborForce: number;
 }
 
 export interface CountryProduct {

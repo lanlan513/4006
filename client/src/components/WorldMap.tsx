@@ -3,8 +3,9 @@ import { geoNaturalEarth1, geoPath } from 'd3-geo';
 import { feature } from 'topojson-client';
 import worldTopo from 'world-atlas/countries-110m.json';
 import type { CountryListItem, TradeFlow, ChainNode, ChainEdge, ChainStage } from '../api';
-import type { MetricKey } from '../store';
-import { fmtTradeB } from '../format';
+import type { MapMetricKey } from '../store';
+import { isPopMetric, metricLabel } from '../store';
+import { fmtTradeB, fmtMetric, fmtPopulation, fmtGrowth, fmtPercent } from '../format';
 
 /* ---------- 配色 ---------- */
 export const RAMP = ['#1a2734', '#1f3848', '#264d63', '#2f6680', '#3e85a6', '#58a9c8'];
@@ -12,6 +13,11 @@ const GROWTH_COLORS = ['#c06a58', '#2b3a4a', '#38596f', '#4e8571', '#7fb069'];
 export const STAGE_COLORS = ['#d98a6e', '#e0a94f', '#57a9c9', '#7fb069', '#b48ac9', '#8b97a9'];
 const LAND = '#171e2a';
 const LAND_DIM = '#11161f';
+
+/** 人口模式连续色带（暖色，与经济的蓝青 RAMP 区分） */
+export const POP_RAMP = ['#23212e', '#3d2f4e', '#6b4560', '#9c6669', '#c98a6d', '#e8bd85'];
+/** 人口增长率发散色带：收缩 → 平稳 → 扩张 */
+export const POP_GROWTH_RAMP = ['#c06a58', '#2b3a4a', '#7fb069'];
 
 export function stageColor(stages: ChainStage[], key: string): string {
   const i = stages.findIndex((s) => s.key === key);
@@ -23,7 +29,20 @@ function hexToRgba(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-export function metricValue(c: CountryListItem, metric: MetricKey): number | null {
+/** 在多锚点色带上做连续 RGB 插值，t ∈ [0, 1] */
+export function rampColor(ramp: string[], t: number): string {
+  const x = Math.min(1, Math.max(0, t)) * (ramp.length - 1);
+  const i = Math.min(ramp.length - 2, Math.floor(x));
+  const f = x - i;
+  const c0 = parseInt(ramp[i].slice(1), 16);
+  const c1 = parseInt(ramp[i + 1].slice(1), 16);
+  const r = Math.round(((c0 >> 16) & 255) + (((c1 >> 16) & 255) - ((c0 >> 16) & 255)) * f);
+  const g = Math.round(((c0 >> 8) & 255) + (((c1 >> 8) & 255) - ((c0 >> 8) & 255)) * f);
+  const b = Math.round((c0 & 255) + ((c1 & 255) - (c0 & 255)) * f);
+  return `rgb(${r},${g},${b})`;
+}
+
+export function metricValue(c: CountryListItem, metric: MapMetricKey): number | null {
   if (metric === 'trade') return c.exports != null && c.imports != null ? c.exports + c.imports : null;
   return c[metric] as number | null;
 }
@@ -35,7 +54,7 @@ interface Scale {
 }
 
 /** 顺序型指标：按当年分位数分桶，保证地图始终有对比层次 */
-function buildScale(countries: CountryListItem[], metric: MetricKey): Scale {
+function buildScale(countries: CountryListItem[], metric: MapMetricKey): Scale {
   if (metric === 'gdpGrowth') {
     const get = (v: number | null) => {
       if (v == null) return LAND;
@@ -46,6 +65,35 @@ function buildScale(countries: CountryListItem[], metric: MetricKey): Scale {
       return GROWTH_COLORS[4];
     };
     return { get, min: -6, max: 10 };
+  }
+  if (metric === 'popGrowth') {
+    // 人口增长率：固定域 [-2%, +4%] 上的连续发散色带，跨年份色标稳定
+    const get = (v: number | null) => {
+      if (v == null) return LAND;
+      const t = v <= 0 ? 0.5 + v / 4 : 0.5 + v / 8;
+      return rampColor(POP_GROWTH_RAMP, t);
+    };
+    return { get, min: -2, max: 4 };
+  }
+  if (isPopMetric(metric)) {
+    // 人口规模 / 比率类指标：当年值域上的连续色带。
+    // 规模类（总人口、劳动力）跨度大，取对数域避免小国被压成同色。
+    const logScale = metric === 'population' || metric === 'laborForce';
+    const values = countries
+      .map((c) => metricValue(c, metric))
+      .filter((v): v is number => v != null && v > 0)
+      .sort((a, b) => a - b);
+    const min = values[0] ?? 0;
+    const max = values[values.length - 1] ?? 1;
+    const lo = logScale ? Math.log(min || 1) : min;
+    const hi = logScale ? Math.log(max || 1) : max;
+    const span = hi - lo || 1;
+    const get = (v: number | null) => {
+      if (v == null || v <= 0) return LAND;
+      const x = logScale ? Math.log(v) : v;
+      return rampColor(POP_RAMP, (x - lo) / span);
+    };
+    return { get, min, max };
   }
   const values = countries
     .map((c) => metricValue(c, metric))
@@ -104,7 +152,7 @@ export interface ChainOverlay {
 
 interface Props {
   countries: CountryListItem[];
-  metric: MetricKey;
+  metric: MapMetricKey;
   selected: string | null;
   onSelect: (code: string | null) => void;
   flows?: TradeFlow[] | null;
@@ -285,12 +333,24 @@ export default function WorldMap({
 
   const showCountryTip = (e: React.PointerEvent, c: CountryListItem | null, name?: string) => {
     const rows: [string, string][] = [];
-    if (c?.gdp) rows.push(['GDP', `$${(c.gdp / 1e12).toFixed(2)}T`]);
-    if (c?.gdpGrowth != null) rows.push(['增速', `${c.gdpGrowth > 0 ? '+' : ''}${c.gdpGrowth.toFixed(1)}%`]);
-    if (flows && c) {
-      const out = flows.filter((f) => f.exporter === c.code).reduce((s, f) => s + f.value, 0);
-      const inn = flows.filter((f) => f.importer === c.code).reduce((s, f) => s + f.value, 0);
-      if (out + inn > 0) rows.push(['双边贸易', fmtTradeB(out + inn)]);
+    if (c && isPopMetric(metric)) {
+      // 人口数据模式：悬浮卡片展示全部人口指标，当前着色指标置顶
+      const cur = metricValue(c, metric);
+      rows.push([`● ${metricLabel(metric)}`, fmtMetric(metric, cur)]);
+      if (metric !== 'population') rows.push(['总人口', fmtPopulation(c.population)]);
+      if (metric !== 'popGrowth') rows.push(['人口增长率', fmtGrowth(c.popGrowth)]);
+      if (metric !== 'agingRate') rows.push(['老龄化率', fmtPercent(c.agingRate)]);
+      if (metric !== 'urbanRate') rows.push(['城市化率', fmtPercent(c.urbanRate)]);
+      if (metric !== 'laborForce') rows.push(['劳动力规模', fmtPopulation(c.laborForce)]);
+    } else {
+      if (c?.gdp) rows.push(['GDP', `$${(c.gdp / 1e12).toFixed(2)}T`]);
+      if (c?.gdpGrowth != null) rows.push(['增速', `${c.gdpGrowth > 0 ? '+' : ''}${c.gdpGrowth.toFixed(1)}%`]);
+      if (c?.population != null) rows.push(['人口', fmtPopulation(c.population)]);
+      if (flows && c) {
+        const out = flows.filter((f) => f.exporter === c.code).reduce((s, f) => s + f.value, 0);
+        const inn = flows.filter((f) => f.importer === c.code).reduce((s, f) => s + f.value, 0);
+        if (out + inn > 0) rows.push(['双边贸易', fmtTradeB(out + inn)]);
+      }
     }
     setTip({ x: e.clientX, y: e.clientY, title: c?.name ?? name ?? '', rows });
   };

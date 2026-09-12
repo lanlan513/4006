@@ -43,7 +43,9 @@ app.get('/api/countries', (req, res) => {
     .prepare(
       `SELECT c.code, c.name, c.region, c.iso_numeric AS isoNumeric, c.lon, c.lat,
               m.gdp, m.gdp_growth AS gdpGrowth, m.population, m.gdp_per_capita AS gdpPerCapita,
-              m.exports, m.imports
+              m.exports, m.imports,
+              m.pop_growth AS popGrowth, m.aging_rate AS agingRate,
+              m.urban_rate AS urbanRate, m.labor_force AS laborForce
        FROM countries c
        LEFT JOIN country_metrics m
          ON m.country_code = c.code AND m.year = ?
@@ -68,7 +70,9 @@ app.get('/api/countries/:code', (req, res) => {
   const timeseries = db
     .prepare(
       `SELECT year, gdp, gdp_growth AS gdpGrowth, population, gdp_per_capita AS gdpPerCapita,
-              exports, imports
+              exports, imports,
+              pop_growth AS popGrowth, aging_rate AS agingRate,
+              urban_rate AS urbanRate, labor_force AS laborForce
        FROM country_metrics WHERE country_code = ? ORDER BY year`
     )
     .all(code);
