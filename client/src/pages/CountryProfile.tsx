@@ -4,6 +4,7 @@ import ProfileSkeleton from '../components/ProfileSkeleton';
 import EmptyState from '../components/EmptyState';
 import MetricCards from '../components/MetricCards';
 import GlobalPosition from '../components/GlobalPosition';
+import TrendCharts from '../components/TrendCharts';
 import { regionName } from '../api';
 import type { CountryProfile as ProfileData } from '../schemas';
 import { useCountryProfile } from '../hooks/useCountryProfile';
@@ -163,6 +164,9 @@ function ProfileContent({ data, onOpenCountry }: {
           <EChart option={tradeOption} />
         </div>
       </div>
+
+      {/* 近年变化趋势：GDP 增长率 / 人口变化 / 进出口贸易额（近 10 年，数据不足自动降级为文本） */}
+      <TrendCharts timeseries={timeseries} />
 
       <div className="section-title">主要贸易商品{productTitleSuffix}</div>
       <div className="two-col">

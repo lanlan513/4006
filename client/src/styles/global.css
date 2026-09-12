@@ -645,6 +645,23 @@ input[type='range'].year-slider::-webkit-slider-thumb {
 .chart-card p { font-size: 11px; color: var(--text-faint); margin-bottom: 8px; }
 .chart-box { height: 250px; }
 
+/* 近年变化趋势：三列网格，窄屏在下方媒体查询中降为单列 */
+.trend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+/* 历史数据点不足时的降级占位（与图表等高，避免布局跳动） */
+.chart-fallback {
+  height: 230px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 16px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.7;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .list-card {
   background: var(--bg-raised);
@@ -921,7 +938,7 @@ input[type='range'].year-slider::-webkit-slider-thumb {
 }
 
 @media (max-width: 900px) {
-  .chart-grid, .two-col { grid-template-columns: 1fr; }
+  .chart-grid, .trend-grid, .two-col { grid-template-columns: 1fr; }
   .country-card { width: calc(100% - 36px); }
   .header-note { display: none; }
 }
