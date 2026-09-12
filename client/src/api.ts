@@ -153,6 +153,29 @@ export interface ResourceDetail {
   roleNotes: ResourceRoleNotes | null;
 }
 
+/* ---------- 资源贸易运输航线 ---------- */
+
+/** 航线类型：sea 海运航线 / pipe 油气管道 / land 陆路运输 */
+export type TradeRouteKind = 'sea' | 'pipe' | 'land';
+
+export interface TradeRoute {
+  key: string;
+  /** 出口地（产地 / 出口国 / 港口） */
+  from: string;
+  /** 进口地（消费国 / 港口） */
+  to: string;
+  kind: TradeRouteKind;
+  /** 年贸易流量（单位同资源 unit），决定连线粗细与粒子密度 */
+  value: number;
+  /** 途径点 [经度, 纬度]，首 = 出口、末 = 进口；粒子严格按此顺序流动 */
+  points: [number, number][];
+}
+
+export interface ResourceRoutes {
+  resource: Omit<ResourceBrief, 'siteCount' | 'consumerCount'>;
+  routes: TradeRoute[];
+}
+
 export class ApiError extends Error {
   status: number;
   url: string;
@@ -200,6 +223,7 @@ export const api = {
   chain: (id: string) => get<ChainDetail>(`/api/chains/${id}`),
   resources: () => get<{ resources: ResourceBrief[] }>('/api/resources'),
   resource: (id: string) => get<ResourceDetail>(`/api/resources/${id}`),
+  resourceRoutes: (id: string) => get<ResourceRoutes>(`/api/resources/${id}/routes`),
 };
 
 export const REGION_NAMES: Record<string, string> = {

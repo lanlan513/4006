@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { seedAll, seedResources, seedResourceRoles } from './seed.js';
+import { seedAll, seedResources, seedResourceRoles, seedTradeRoutes } from './seed.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 export const DB_PATH = resolve(__dirname, '../data/app.db');
@@ -122,6 +122,18 @@ CREATE TABLE IF NOT EXISTS resource_country_roles (
   PRIMARY KEY (resource_id, country_code)
 );
 CREATE INDEX IF NOT EXISTS idx_resource_roles ON resource_country_roles(resource_id);
+
+CREATE TABLE IF NOT EXISTS resource_routes (
+  resource_id TEXT NOT NULL REFERENCES resources(id),
+  route_key   TEXT NOT NULL,
+  from_name   TEXT NOT NULL,    -- 出口地（产地 / 出口国 / 港口）
+  to_name     TEXT NOT NULL,    -- 进口地（消费国 / 港口）
+  kind        TEXT NOT NULL CHECK (kind IN ('sea','pipe','land')),  -- 海运 / 管道 / 陆路
+  value       REAL NOT NULL,    -- 年贸易流量（单位同 resources.unit）
+  waypoints   TEXT NOT NULL,    -- JSON: [[经度,纬度],...]，首 = 出口、末 = 进口
+  PRIMARY KEY (resource_id, route_key)
+);
+CREATE INDEX IF NOT EXISTS idx_resource_routes ON resource_routes(resource_id);
 `;
 
 let _db: Database.Database | null = null;
@@ -153,6 +165,14 @@ export function getDb(): Database.Database {
     if (roleCount === 0) {
       console.log('[db] 资源国家角色数据为空，增量播种角色标注数据…');
       seedResourceRoles(db);
+    }
+    // 资源贸易航线表为空时增量播种（旧库升级）
+    const { c: routeCount } = db.prepare(
+      'SELECT COUNT(*) AS c FROM resource_routes'
+    ).get() as { c: number };
+    if (routeCount === 0) {
+      console.log('[db] 资源贸易航线数据为空，增量播种航线数据…');
+      seedTradeRoutes(db);
     }
   }
   _db = db;

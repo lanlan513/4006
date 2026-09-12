@@ -304,6 +304,35 @@ app.get('/api/resources/:id', (req, res) => {
   });
 });
 
+/* ---------------- 资源贸易运输航线 ---------------- */
+
+/**
+ * 某类资源的海上 / 陆路贸易运输航线。
+ * waypoints 为途径点 JSON，首点 = 出口地、末点 = 进口地，
+ * 前端粒子动画严格沿 waypoints 顺序由出口国流向进口国。
+ */
+app.get('/api/resources/:id/routes', (req, res) => {
+  const id = String(req.params.id);
+  const resource = db
+    .prepare('SELECT id, name, unit, color, description FROM resources WHERE id = ?')
+    .get(id) as Record<string, unknown> | undefined;
+  if (!resource) return res.status(404).json({ error: 'resource not found' });
+
+  const rows = db
+    .prepare(
+      `SELECT route_key AS key, from_name AS "from", to_name AS "to",
+              kind, value, waypoints
+       FROM resource_routes WHERE resource_id = ?
+       ORDER BY value DESC`
+    )
+    .all(id) as { key: string; from: string; to: string; kind: string; value: number; waypoints: string }[];
+
+  res.json({
+    resource,
+    routes: rows.map(({ waypoints, ...r }) => ({ ...r, points: JSON.parse(waypoints) })),
+  });
+});
+
 app.use('/api', (_req, res) => {
   res.status(404).json({ error: 'api route not found' });
 });

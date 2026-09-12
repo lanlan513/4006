@@ -929,3 +929,57 @@ input[type='range'].year-slider::-webkit-slider-thumb {
   .profile-name { font-size: 28px; }
   .page-error { width: calc(100% - 24px); flex-wrap: wrap; }
 }
+
+/* ============ 资源贸易航线 ============ */
+.route-map svg,
+.route-map .route-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.route-canvas { pointer-events: none; }
+.route-map .zoom-controls { bottom: 24px; }
+
+/* 图例：线宽示例与线型 */
+.lg-block { display: flex; flex-direction: column; gap: 2px; }
+.lg-lines { display: block; width: 100%; height: 34px; }
+.lg-line-value { fill: var(--text-faint); font-size: 8.5px; font-variant-numeric: tabular-nums; }
+.lg-kind { width: 26px; height: 6px; flex: none; }
+.resource-legend .lg-particle {
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+}
+
+/* 航线排行行 */
+.route-rank-row { padding: 4px 0; font-size: 11.5px; }
+.route-rank-head {
+  display: grid;
+  grid-template-columns: 1fr auto 40px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.route-rank-head .rank-value { font-size: 11px; }
+.kind-chip {
+  flex: none;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+.kind-chip.kind-sea { color: var(--cyan); border-color: rgba(87, 169, 201, 0.45); }
+.kind-chip.kind-pipe { color: var(--accent); border-color: rgba(224, 169, 79, 0.45); }
+.kind-chip.kind-land { color: var(--green); border-color: rgba(127, 176, 105, 0.45); }
+
+/* 无航线空状态 */
+.route-empty {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  line-height: 1.7;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-strong);
+  border-radius: 8px;
+  padding: 10px 12px;
+}

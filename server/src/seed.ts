@@ -11,6 +11,7 @@ import { PRODUCTS, COUNTRY_PRODUCTS } from './data/products.js';
 import { CHAINS } from './data/chains.js';
 import { RESOURCES } from './data/resources.js';
 import { RESOURCE_ROLES } from './data/resourceRoles.js';
+import { TRADE_ROUTES } from './data/tradeRoutes.js';
 import { DB_PATH, getDb } from './db.js';
 
 /** 在三个锚点年份 (2000 / 2010 / 2023) 之间线性插值 */
@@ -155,6 +156,7 @@ function seedResourceRows(db: Database.Database) {
     }
   }
   insertResourceRoleRows(db, insRole);
+  insertTradeRouteRows(db);
 }
 
 /** 角色行写入（假定 resources 已存在） */
@@ -192,6 +194,34 @@ export function seedResourceRoles(db: Database.Database) {
   tx();
 }
 
+/** 贸易航线行写入：seedAll 与增量播种共用 */
+function insertTradeRouteRows(db: Database.Database) {
+  db.exec('DELETE FROM resource_routes;');
+  const insRoute = db.prepare(
+    `INSERT INTO resource_routes (resource_id, route_key, from_name, to_name, kind, value, waypoints)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
+  for (const [resourceId, routes] of Object.entries(TRADE_ROUTES)) {
+    routes.forEach((r, i) => {
+      insRoute.run(
+        resourceId,
+        `r${String(i + 1).padStart(2, '0')}`,
+        r.from,
+        r.to,
+        r.kind,
+        r.value,
+        JSON.stringify(r.points)
+      );
+    });
+  }
+}
+
+/** 单独播种资源贸易航线数据（供旧库增量升级使用） */
+export function seedTradeRoutes(db: Database.Database) {
+  const tx = db.transaction(() => insertTradeRouteRows(db));
+  tx();
+}
+
 /** 独立运行：删除旧库后重新播种 */
 const isMain = process.argv[1] && process.argv[1].endsWith('seed.ts');
 if (isMain) {
@@ -202,6 +232,9 @@ if (isMain) {
   const metrics = db.prepare('SELECT COUNT(*) AS c FROM country_metrics').get() as { c: number };
   const flows = db.prepare('SELECT COUNT(*) AS c FROM trade_flows').get() as { c: number };
   const nodes = db.prepare('SELECT COUNT(*) AS c FROM chain_nodes').get() as { c: number };
-  console.log(`播种完成：${metrics.c} 条国家年度指标，${flows.c} 条贸易流，${nodes.c} 个产业链节点。`);
+  const routes = db.prepare('SELECT COUNT(*) AS c FROM resource_routes').get() as { c: number };
+  console.log(
+    `播种完成：${metrics.c} 条国家年度指标，${flows.c} 条贸易流，${nodes.c} 个产业链节点，${routes.c} 条资源贸易航线。`
+  );
   db.close();
 }
