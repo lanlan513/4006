@@ -53,11 +53,16 @@ export type CountryYoy = z.infer<typeof countryYoySchema>;
 
 /* ---------------- 全球位置（排名 / 占比） ---------------- */
 
-/** 单项指标的全球位置：排名、占比 %、参与排名的经济体总量与数量 */
+/**
+ * 单项指标的全球位置：
+ * - rank：收录经济体之间的名次（不是全球名次，因为数据集仅覆盖 43 个经济体）
+ * - total：真实全球总量参照值（World Bank / UN / WTO 口径），作为 share 的分母
+ * - share：占全球总量的百分比
+ */
 export const positionStatSchema = z.object({
   rank: z.number().int().nullable(),
   total: nullableNumber,
-  share: nullableNumber, // 占收录经济体总量的百分比
+  share: nullableNumber,
   count: z.number().int(),
 });
 export type PositionStat = z.infer<typeof positionStatSchema>;

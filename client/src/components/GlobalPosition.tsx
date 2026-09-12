@@ -1,8 +1,10 @@
 /**
- * 全球位置（Global Position）：该国在 GDP、人口、出口额上的全球排名与全球占比。
+ * 全球位置（Global Position）：该国在 GDP、人口、出口额上的排名与全球占比。
  *
  * - 左侧为百分比环形图（SVG，viewBox 自适应缩放），右侧为响应式进度条，双重视觉编码。
- * - 排名以「第 N / 共 M」展示；占比缺失（指标为 null）时统一显示 "--"。
+ * - 占比分母为真实全球总量（World Bank / UN / WTO 参照值），文案为「占全球」；
+ *   排名仅能在收录的 43 个经济体之间计算，文案明确标注范围，二者口径不同、不可混淆。
+ * - 占比或排名缺失（指标为 null）时统一显示 "--"。
  * - 响应式：桌面 3 列，平板 2 列，移动端单列堆叠。
  */
 import type { GlobalPosition as PositionData, PositionStat } from '../schemas';
@@ -74,8 +76,8 @@ function PositionItem({
 }) {
   const rankText = hasValue(stat.rank) ? (
     <>
-      第 <b>{stat.rank}</b> 名
-      <span className="position-count">/ 共 {stat.count} 个经济体</span>
+      收录经济体第 <b>{stat.rank}</b> 名
+      <span className="position-count">/ 共 {stat.count} 个</span>
     </>
   ) : (
     <span className="na">{NA}</span>
@@ -96,7 +98,7 @@ function PositionItem({
       </div>
       <ShareBar progress={stat.share} color={color} />
       <div className="position-total" title={totalText}>
-        收录经济体合计：{totalText}
+        全球总量：{totalText}
       </div>
     </article>
   );
@@ -131,8 +133,9 @@ export default function GlobalPosition({ data }: { data: PositionData }) {
         />
       </div>
       <p className="position-note">
-        * 排名与占比基于当前收录的 {covered} 个主要经济体同年度数据汇总计算，
-        并列国家取相同名次；某项指标缺测的国家不参与该指标排名。
+        * 占比分母为全球总量（GDP / 人口 / 货物出口分别采用 World Bank、UN、WTO 口径的世界合计）；
+        排名仅基于当前收录的 {covered} 个主要经济体，并非全球名次，并列国家取相同名次，
+        某项指标缺测的国家不参与该指标排名。
       </p>
     </section>
   );

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import type { Database } from 'better-sqlite3';
 import { getDb } from './db.js';
 import { REGIONS, YEARS } from './data/countries.js';
+import { worldTotalsByYear } from './data/world.js';
 import { computeGlobalPosition, computeYoy } from './position.js';
 import type { MetricRow, YoyRow } from './position.js';
 
@@ -126,7 +127,7 @@ app.get('/api/country-profile', (req, res) => {
   // 同比变化率：与上一个收录年度（缺测则再向前取）对比
   const yoy = computeYoy(timeseries as unknown as YoyRow[], year);
 
-  // 全球位置：该年度全部收录经济体的 GDP / 人口 / 出口额排名与占比
+  // 全球位置：排名在收录经济体之间计算；占比分母使用真实全球总量（World Bank / UN / WTO）
   const yearRows = db
     .prepare(
       `SELECT c.code, m.gdp, m.population, m.gdp_per_capita AS gdpPerCapita,
@@ -136,7 +137,12 @@ app.get('/api/country-profile', (req, res) => {
          ON m.country_code = c.code AND m.year = ?`
     )
     .all(year) as MetricRow[];
-  const globalPosition = computeGlobalPosition(yearRows, code, year);
+  const world = worldTotalsByYear.get(year);
+  const globalPosition = computeGlobalPosition(yearRows, code, year, {
+    gdp: world?.gdp ?? null,
+    population: world?.population ?? null,
+    exports: world?.exports ?? null,
+  });
 
   // 商品结构取 <= 请求年份的最新播种年度（当前种子数据为 2023 年口径）
   const productYearRow = db
